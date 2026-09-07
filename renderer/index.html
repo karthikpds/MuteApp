@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self';" />
+  <title>AppMute</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 5 6 9H2v6h4l5 4V5z" fill="currentColor" stroke="none" opacity="0.9"/>
+            <path id="logo-waves" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>AppMute</h1>
+          <p>Mute or pause audio from specific apps</p>
+        </div>
+        <span id="platform-badge" class="platform-badge" title="">…</span>
+      </div>
+      <div class="header-actions">
+        <button id="btn-add" class="btn btn-primary">+ Add App</button>
+        <button id="btn-settings" class="btn btn-icon" title="Settings" aria-label="Settings">⚙</button>
+      </div>
+    </header>
+
+    <div id="platform-notice" class="notice hidden" role="status"></div>
+
+    <main id="app-list" class="app-list" aria-live="polite"></main>
+
+    <div id="empty-state" class="empty-state hidden">
+      <div class="empty-icon">🔇</div>
+      <h2>No apps yet</h2>
+      <p>Click <strong>+ Add App</strong> to pick a running application,<br />then assign it a global hotkey.</p>
+    </div>
+
+    <footer class="statusbar">
+      <span id="statusbar-text">Loading…</span>
+      <button id="btn-refresh" class="link-btn" title="Refresh status">Refresh</button>
+    </footer>
+  </div>
+
+  <!-- Add App dialog -->
+  <div id="modal-add" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="add-title">
+    <div class="modal">
+      <h2 id="add-title">Add application</h2>
+      <p class="muted">Pick a running application. No need to type process names.</p>
+      <input id="add-search" class="text-input" type="search" placeholder="Search applications…" autocomplete="off" />
+      <div id="add-list" class="pick-list"><p class="muted">Loading running applications…</p></div>
+      <div class="modal-actions">
+        <button id="add-cancel" class="btn">Cancel</button>
+        <button id="add-confirm" class="btn btn-primary" disabled>Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hotkey dialog -->
+  <div id="modal-hotkey" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="hotkey-title">
+    <div class="modal modal-small">
+      <h2 id="hotkey-title">Set hotkey</h2>
+      <p class="muted" id="hotkey-app-name"></p>
+      <p>Press the desired key combination <em>(works globally, even when AppMute is in the background)</em>.</p>
+      <div id="hotkey-capture" class="hotkey-capture" tabindex="0">Press keys…</div>
+      <div id="hotkey-conflict" class="conflict hidden" role="alert"></div>
+      <div class="modal-actions">
+        <button id="hotkey-clear" class="btn btn-danger-ghost" title="Remove the hotkey">Remove</button>
+        <span class="spacer"></span>
+        <button id="hotkey-cancel" class="btn">Cancel</button>
+        <button id="hotkey-save" class="btn btn-primary" disabled>Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings dialog -->
+  <div id="modal-settings" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal">
+      <h2 id="settings-title">Settings</h2>
+      <label class="setting-row"><input type="checkbox" id="set-startup" /> Launch AppMute at startup</label>
+      <label class="setting-row"><input type="checkbox" id="set-minimized" /> Start minimized</label>
+      <label class="setting-row"><input type="checkbox" id="set-notify" /> Show mute notifications</label>
+      <label class="setting-row"><input type="checkbox" id="set-tray" /> Minimize to tray/menu bar when closed</label>
+      <label class="setting-row">Theme
+        <select id="set-theme" class="select">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="system">System</option>
+        </select>
+      </label>
+      <p class="muted small" id="settings-note"></p>
+      <div class="modal-actions">
+        <button id="set-reset" class="btn btn-danger-ghost">Reset settings</button>
+        <span class="spacer"></span>
+        <button id="set-close" class="btn btn-primary">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts" aria-live="assertive"></div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

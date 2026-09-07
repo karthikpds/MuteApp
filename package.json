@@ -1,0 +1,52 @@
+{
+  "name": "appmute",
+  "version": "0.1.0",
+  "description": "Mute or pause audio from specific apps — per-application audio control for Windows and macOS",
+  "main": "main.js",
+  "author": "AppMute",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"tests/*.test.js\"",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac"
+  },
+  "devDependencies": {
+    "electron": "^33.4.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.appmute.app",
+    "productName": "AppMute",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "lib/**/*",
+      "native/**/*",
+      "resources/tray.png",
+      "resources/tray@2x.png",
+      "resources/app-icon.png",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "native/windows/",
+        "to": "native/windows/",
+        "filter": ["*.exe", "*.md", "*.txt"]
+      }
+    ],
+    "win": {
+      "target": ["nsis"]
+    },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.utilities"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
