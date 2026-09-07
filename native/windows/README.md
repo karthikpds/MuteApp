@@ -11,9 +11,17 @@ AudioController.exe mute   --pid 1234
 AudioController.exe unmute --process chrome.exe
 AudioController.exe toggle --pid 1234
 AudioController.exe status --pid 1234
+AudioController.exe pause
+AudioController.exe resume
+AudioController.exe playpause
 ```
 
 Every command prints one JSON object (`{"ok":true,...}`).
+
+Pause/Resume are **system-wide** media keys (`VK_MEDIA_PAUSE` /
+`VK_MEDIA_PLAY` / `VK_MEDIA_PLAY_PAUSE`) driving the current Windows media
+(SMTC) session — e.g. YouTube Music. Unlike mute they are not per-PID:
+`--pid`/`--process` are accepted but ignored.
 
 - `--pid` targets one process. `--process` (without `--pid`) targets **every**
   session with that process name and reports `matchedProcesses` — this is how
@@ -56,6 +64,8 @@ AudioController.exe list
 AudioController.exe windows
 AudioController.exe status --process chrome.exe
 AudioController.exe toggle --process chrome.exe
+AudioController.exe pause
+AudioController.exe resume
 ```
 
 ## Troubleshooting

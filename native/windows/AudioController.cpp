@@ -10,9 +10,19 @@
 //   AudioController.exe unmute --pid 1234 | --process chrome.exe
 //   AudioController.exe toggle --pid 1234 | --process chrome.exe
 //   AudioController.exe status --pid 1234 | --process chrome.exe
+//   AudioController.exe pause
+//   AudioController.exe resume
+//   AudioController.exe playpause
 //
 // --pid targets one process; --process (no --pid) targets EVERY session
 // whose process name matches, e.g. all chrome.exe renderers at once.
+//
+// pause/resume/playpause send system media keys (VK_MEDIA_PAUSE /
+// VK_MEDIA_PLAY / VK_MEDIA_PLAY_PAUSE) to the OS media session. WASAPI
+// exposes no per-app transport control, so these act on whatever Windows
+// considers the current media session (e.g. YouTube Music in Chrome/Edge
+// or the desktop app) — not strictly per-PID. --pid/--process are accepted
+// but ignored for these commands.
 //
 // Every command prints exactly one JSON object to stdout:
 //   { "ok": true, ... }  or  { "ok": false, "error": "..." }
@@ -308,10 +318,18 @@ void PrintErr(const std::string& msg) {
     printf("{\"ok\":false,\"error\":\"%s\"}\n", JsonEscape(msg).c_str());
 }
 
+// System-wide media transport via virtual media keys. WASAPI has no
+// per-app pause, so this drives the current Windows media session (SMTC)
+// — e.g. YouTube Music in a browser or desktop player.
+void SendMediaKey(WORD vk) {
+    keybd_event((BYTE)vk, 0, 0, 0);
+    keybd_event((BYTE)vk, 0, KEYEVENTF_KEYUP, 0);
+}
+
 } // namespace
 
 int wmain(int argc, wchar_t** argv) {
-    if (argc < 2) { PrintErr("Usage: AudioController.exe <list|windows|mute|unmute|toggle|status> [--pid N] [--process name]"); return 1; }
+    if (argc < 2) { PrintErr("Usage: AudioController.exe <list|windows|mute|unmute|toggle|status|pause|resume|playpause> [--pid N] [--process name]"); return 1; }
     std::wstring cmd = Lower(argv[1]);
     DWORD pid = 0;
     std::wstring processFilter;
@@ -359,6 +377,19 @@ int wmain(int argc, wchar_t** argv) {
             items += buf;
         }
         PrintOk("\"windows\":[" + items + "]");
+        return 0;
+    }
+
+    if (cmd == L"pause" || cmd == L"resume" || cmd == L"playpause") {
+        // System-wide media keys; --pid/--process intentionally ignored
+        // (Windows has no per-app transport control).
+        if (cmd == L"pause") SendMediaKey(VK_MEDIA_PAUSE);
+        else if (cmd == L"resume") SendMediaKey(VK_MEDIA_PLAY);
+        else SendMediaKey(VK_MEDIA_PLAY_PAUSE);
+        const char* state =
+            (cmd == L"pause") ? "\"paused\":true" :
+            (cmd == L"resume") ? "\"paused\":false" : "\"toggled\":true";
+        PrintOk(state);
         return 0;
     }
 
@@ -428,6 +459,6 @@ int wmain(int argc, wchar_t** argv) {
         return 1;
     }
 
-    PrintErr("Unknown command. Use list|windows|mute|unmute|toggle|status.");
+    PrintErr("Unknown command. Use list|windows|mute|unmute|toggle|status|pause|resume|playpause.");
     return 1;
 }

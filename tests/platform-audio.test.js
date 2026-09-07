@@ -19,7 +19,7 @@ test('platform capabilities: Windows true mute, macOS emulated', () => {
 test('audio-manager describeSupport reflects platform', () => {
   const win = describeSupport({ name: 'Chrome' }, 'win32');
   assert.equal(win.muteSupported, true);
-  assert.equal(win.pauseSupported, false);
+  assert.equal(win.pauseSupported, true);
 
   const macSpotify = describeSupport({ name: 'Spotify' }, 'darwin');
   assert.equal(macSpotify.muteSupported, true);
