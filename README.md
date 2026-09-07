@@ -55,7 +55,7 @@ npm run dist:mac   # DMG (run on macOS)
    asks permission to control each browser — see `docs/LIMITATIONS.md`;
    denying it only hides tab titles.
 2. Click **Set hotkey** on the row, press e.g. `Ctrl + Alt + Y`, **Save**.
-3. Press the hotkey anywhere — the app toggles, others keep playing.
+3. Press the hotkey anywhere — the app mutes + pauses together (next press unmutes + resumes), others keep playing. Where pause isn't supported the hotkey just mutes.
 4. `⋮` menu: Mute/Unmute, Set Hotkey, Pause/Resume (if supported), Open, Remove.
 5. `⚙ Settings`: startup, start minimized, notifications, tray-on-close, theme, reset.
 

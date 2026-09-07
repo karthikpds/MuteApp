@@ -170,17 +170,72 @@ async function handleHotkeyToggle(id) {
   const apps = store.getApps();
   const entry = apps.find((a) => a.id === id);
   if (!entry) return;
-  try {
-    const res = await audio.toggleMuted(entry);
-    entry.muted = !!res.muted;
-    entry.emulated = !!res.emulated;
-    entry.lastChanged = Date.now();
-    store.setApps(apps);
-    broadcastUpdate();
-    notify(`${entry.name} — ${entry.muted ? 'Muted' : 'Unmuted'}`);
-  } catch (e) {
-    notify(`${entry.name} — could not toggle`, String((e && e.message) || e), true);
-    sendToast('error', `Could not toggle "${entry.name}"`, String((e && e.message) || e));
+  const sup = audioManager.describeSupport(entry);
+  if (!sup.muteSupported && !sup.pauseSupported) {
+    const reason = sup.muteReason || sup.pauseReason || 'Nothing to toggle.';
+    notify(`${entry.name} — could not toggle`, String(reason), true);
+    sendToast('error', `Could not toggle "${entry.name}"`, String(reason));
+    return;
+  }
+  let muteErr = null;
+  let pauseErr = null;
+  // 1. Toggle mute where supported.
+  if (sup.muteSupported) {
+    try {
+      const res = await audio.toggleMuted(entry);
+      entry.muted = !!res.muted;
+      entry.emulated = !!res.emulated;
+    } catch (e) {
+      muteErr = e;
+    }
+  }
+  // 2. Mirror pause state to the (new) mute state where supported, so one
+  // keypress means muted+paused and the next means unmuted+resumed. When
+  // mute isn't supported (e.g. macOS QuickTime) or the mute toggle failed
+  // (e.g. idle app with no audio session yet), fall back to toggling pause
+  // on its own tracked state so the keypress still does something useful.
+  let newPaused = pausedState.get(id) || false;
+  let wantedPause = null; // true = tried to pause, false = tried to resume
+  if (sup.pauseSupported) {
+    if (sup.muteSupported && !muteErr) wantedPause = !!entry.muted;
+    else wantedPause = !newPaused;
+  }
+  if (wantedPause !== null) {
+    try {
+      if (wantedPause) {
+        await audio.pause(entry);
+        newPaused = true;
+      } else {
+        await audio.resume(entry);
+        newPaused = false;
+      }
+      pausedState.set(id, newPaused);
+    } catch (e) {
+      pauseErr = e;
+    }
+  }
+  entry.lastChanged = Date.now();
+  store.setApps(apps);
+  broadcastUpdate();
+  if (!muteErr && !pauseErr) {
+    const parts = [];
+    if (sup.muteSupported) parts.push(entry.muted ? 'Muted' : 'Unmuted');
+    if (wantedPause !== null) parts.push(newPaused ? 'Paused' : 'Resumed');
+    notify(`${entry.name} — ${parts.join(' + ') || 'Toggled'}`);
+  } else {
+    if (muteErr) {
+      notify(`${entry.name} — could not toggle mute`, String((muteErr && muteErr.message) || muteErr), true);
+      sendToast('error', `Could not toggle mute for "${entry.name}"`, String((muteErr && muteErr.message) || muteErr));
+    } else if (sup.muteSupported) {
+      notify(`${entry.name} — ${entry.muted ? 'Muted' : 'Unmuted'}`);
+    }
+    if (pauseErr) {
+      const action = wantedPause ? 'pause' : 'resume';
+      notify(`${entry.name} — could not ${action}`, String((pauseErr && pauseErr.message) || pauseErr), true);
+      sendToast('error', `Could not ${action} "${entry.name}"`, String((pauseErr && pauseErr.message) || pauseErr));
+    } else if (wantedPause !== null && (muteErr || !sup.muteSupported)) {
+      notify(`${entry.name} — ${newPaused ? 'Paused' : 'Resumed'}`);
+    }
   }
 }
 
