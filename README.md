@@ -32,6 +32,13 @@ cl /EHsc /std:c++17 /O2 AudioController.cpp /link ole32.lib psapi.lib
 
 Details and CMake alternative: `native/windows/README.md`.
 
+### Installing on a Windows machine
+
+End users don't build anything — grab the installer or follow the manual
+steps in **`docs/INSTALL-Windows.md`** (download vs. build, SmartScreen
+note, uninstall). CI builds every push to `main`
+(`.github/workflows/build-win.yml`); pushing a `v*` tag publishes a Release.
+
 ### Packaging installers
 
 ```bash

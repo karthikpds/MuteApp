@@ -34,7 +34,7 @@
       {
         "from": "native/windows/",
         "to": "native/windows/",
-        "filter": ["*.exe", "*.md", "*.txt"]
+        "filter": ["*.exe"]
       }
     ],
     "win": {

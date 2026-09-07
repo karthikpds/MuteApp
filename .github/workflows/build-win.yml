@@ -1,0 +1,71 @@
+# Builds the Windows installer: compiles AudioController.exe with MSVC,
+# runs the unit tests, packages with electron-builder, and uploads the
+# NSIS setup as an artifact. Pushing a tag like v0.2.0 additionally
+# publishes a GitHub Release with the installer attached.
+#
+# End users: download the installer from Releases (or a run's Artifacts) —
+# the audio helper is bundled, no build tools needed on the target machine.
+
+name: build-windows
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed only for tag releases (gh release create)
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build AudioController.exe
+        working-directory: native/windows
+        run: cl /EHsc /std:c++17 /O2 AudioController.cpp /link ole32.lib psapi.lib
+
+      - name: Smoke-test the helper binary
+        # No args -> usage JSON on stdout, exit 1. Deterministic even with
+        # no audio device on the runner; proves the binary executes.
+        working-directory: native/windows
+        run: |
+          .\AudioController.exe
+          if ($LASTEXITCODE -ne 1) { throw "helper did not run as expected (exit=$LASTEXITCODE)" }
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Package Windows installer
+        run: npx electron-builder --win --publish never
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AppMute-Windows-Setup
+          path: dist/*.exe
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: gh release create "${{ github.ref_name }}" dist/*.exe --title "${{ github.ref_name }}" --notes "Windows installer for AppMute ${{ github.ref_name }}. See docs/INSTALL-Windows.md for setup instructions."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
