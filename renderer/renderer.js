@@ -17,6 +17,61 @@ let hotkeyTargetKind = 'mute'; // 'mute' -> hotkey, 'pause' -> pauseHotkey
 let capturedAccelerator = '';
 let noticeDismissed = false; // per-session dismissal of the platform notice
 
+// ---------------------------------------------------------------- hotkey builder ---
+// Mirrors lib/hotkey-utils.js AVAILABLE_KEY_GROUPS (single source of truth is
+// the lib file; this copy lets the vanilla renderer render <optgroup>s
+// without a bundler — keep the two lists in sync).
+const AVAILABLE_KEY_GROUPS = [
+  { label: 'Letters', keys: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('') },
+  { label: 'Digits', keys: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'] },
+  { label: 'Function', keys: Array.from({ length: 24 }, (_, i) => `F${i + 1}`) },
+  { label: 'Punctuation', keys: ['`', '-', '=', '[', ']', '\\', ';', "'", ',', '.', '/'] },
+  {
+    label: 'Navigation / Editing',
+    keys: [
+      'Space', 'Tab', 'Backspace', 'Delete', 'Insert', 'Return', 'Enter',
+      'Up', 'Down', 'Left', 'Right', 'Home', 'End', 'PageUp', 'PageDown',
+      'Escape', 'CapsLock', 'Numlock', 'Scrolllock', 'PrintScreen',
+    ],
+  },
+  {
+    label: 'Numpad',
+    keys: [
+      'num0', 'num1', 'num2', 'num3', 'num4',
+      'num5', 'num6', 'num7', 'num8', 'num9',
+      'numdec', 'numadd', 'numsub', 'nummult', 'numdiv',
+    ],
+  },
+  {
+    label: 'Media',
+    keys: [
+      'VolumeUp', 'VolumeDown', 'VolumeMute',
+      'MediaNextTrack', 'MediaPreviousTrack', 'MediaStop', 'MediaPlayPause',
+    ],
+  },
+];
+
+function dropdownKeyLabel(value) {
+  if (!value) return '';
+  if (value.length === 1) return value.toUpperCase();
+  const labels = {
+    Space: 'Space', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete',
+    Insert: 'Insert', Return: 'Return ⏎', Enter: 'Enter (numpad)',
+    Up: '↑ Up', Down: '↓ Down', Left: '← Left', Right: '→ Right',
+    Home: 'Home', End: 'End', PageUp: 'Page Up', PageDown: 'Page Down',
+    Escape: 'Esc', CapsLock: 'Caps Lock', Numlock: 'Num Lock',
+    Scrolllock: 'Scroll Lock', PrintScreen: 'Print Screen',
+    numdec: 'Num .', numadd: 'Num +', numsub: 'Num −', nummult: 'Num ×', numdiv: 'Num ÷',
+    VolumeUp: 'Volume Up', VolumeDown: 'Volume Down', VolumeMute: 'Volume Mute',
+    MediaNextTrack: 'Media Next', MediaPreviousTrack: 'Media Previous',
+    MediaStop: 'Media Stop', MediaPlayPause: 'Media Play/Pause',
+  };
+  if (labels[value]) return labels[value];
+  const numMatch = /^num([0-9])$/.exec(value);
+  if (numMatch) return `Num ${numMatch[1]}`;
+  return value;
+}
+
 const $ = (id) => document.getElementById(id);
 
 // ---------------------------------------------------------------- display ---
@@ -399,6 +454,92 @@ function acceleratorFromEvent(e) {
   return [...mods, finalKey].join('+');
 }
 
+function populateHotkeyKeySelect() {
+  const sel = $('hotkey-key-select');
+  if (!sel || sel.dataset.populated) return;
+  for (const group of AVAILABLE_KEY_GROUPS) {
+    let groupEl = null;
+    try {
+      groupEl = document.createElement('optgroup');
+      groupEl.label = group.label;
+    } catch {
+      groupEl = null;
+    }
+    for (const key of group.keys) {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = dropdownKeyLabel(key);
+      if (groupEl) groupEl.appendChild(opt);
+      else sel.appendChild(opt);
+    }
+    if (groupEl) sel.appendChild(groupEl);
+  }
+  sel.dataset.populated = '1';
+}
+
+/** Reflect `capturedAccelerator` in the modifier checkboxes + key dropdown. */
+function syncBuilderFromAccelerator(acc) {
+  const ctrl = $('hk-mod-ctrl');
+  const alt = $('hk-mod-alt');
+  const shift = $('hk-mod-shift');
+  const sup = $('hk-mod-super');
+  const sel = $('hotkey-key-select');
+  if (!ctrl || !alt || !shift || !sup || !sel) return;
+  ctrl.checked = false;
+  alt.checked = false;
+  shift.checked = false;
+  sup.checked = false;
+  sel.value = '';
+  if (!acc) return;
+  const parts = String(acc).split('+').map((s) => s.trim()).filter(Boolean);
+  if (parts.length === 0) return;
+  const mods = parts.slice(0, -1).map((s) => s.toLowerCase());
+  const key = parts[parts.length - 1];
+  ctrl.checked = mods.some((m) => m === 'ctrl' || m === 'control');
+  alt.checked = mods.some((m) => m === 'alt' || m === 'option');
+  shift.checked = mods.includes('shift');
+  sup.checked = mods.some((m) => m === 'super' || m === 'meta' || m === 'cmd' || m === 'command');
+  // Match the key case-insensitively so legacy/casing variants still select.
+  const want = String(key).toLowerCase();
+  const match = AVAILABLE_KEY_GROUPS.flatMap((g) => g.keys).find((k) => k.toLowerCase() === want)
+    || (want === 'esc' ? 'Escape' : '');
+  if (match) sel.value = match;
+}
+
+/** Rebuild `capturedAccelerator` from the checkboxes + dropdown, then refresh. */
+function refreshAcceleratorFromBuilder() {
+  const ctrl = $('hk-mod-ctrl');
+  const alt = $('hk-mod-alt');
+  const shift = $('hk-mod-shift');
+  const sup = $('hk-mod-super');
+  const sel = $('hotkey-key-select');
+  if (!ctrl || !alt || !shift || !sup || !sel) return;
+  const parts = [];
+  if (ctrl.checked) parts.push('Control');
+  if (alt.checked) parts.push('Alt');
+  if (shift.checked) parts.push('Shift');
+  if (sup.checked) parts.push('Super');
+  const key = sel.value;
+  const capture = $('hotkey-capture');
+  if (!key || parts.length === 0) {
+    capturedAccelerator = '';
+    if (capture) {
+      capture.textContent = 'Press keys…';
+      capture.classList.remove('captured');
+    }
+  } else {
+    // Canonical order: Control, Alt, Shift, Super.
+    const order = { Control: 0, Alt: 1, Shift: 2, Super: 3 };
+    parts.sort((a, b) => order[a] - order[b]);
+    capturedAccelerator = [...parts, key].join('+');
+    if (capture) {
+      capture.textContent = formatHotkey(capturedAccelerator);
+      capture.classList.add('captured');
+    }
+  }
+  updateHotkeyDialog();
+}
+
 function openHotkeyDialog(id, kind) {
   hotkeyTargetId = id;
   hotkeyTargetKind = kind === 'pause' ? 'pause' : 'mute';
@@ -422,6 +563,8 @@ function openHotkeyDialog(id, kind) {
   $('hotkey-capture').textContent = current ? formatHotkey(current) : 'Press keys…';
   $('hotkey-capture').classList.toggle('captured', !!current);
   if (current) capturedAccelerator = current;
+  populateHotkeyKeySelect();
+  syncBuilderFromAccelerator(capturedAccelerator);
   $('hotkey-conflict').classList.add('hidden');
   $('hotkey-save').disabled = true;
   $('modal-hotkey').classList.remove('hidden');
@@ -569,6 +712,10 @@ function bindEvents() {
     await refresh();
   });
   $('modal-hotkey').addEventListener('click', (e) => { if (e.target.id === 'modal-hotkey') closeHotkeyDialog(); });
+  for (const id of ['hk-mod-ctrl', 'hk-mod-alt', 'hk-mod-shift', 'hk-mod-super']) {
+    $(id).addEventListener('change', refreshAcceleratorFromBuilder);
+  }
+  $('hotkey-key-select').addEventListener('change', refreshAcceleratorFromBuilder);
   $('hotkey-capture').addEventListener('keydown', (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -580,6 +727,7 @@ function bindEvents() {
       capturedAccelerator = '';
       $('hotkey-capture').textContent = 'Press keys…';
       $('hotkey-capture').classList.remove('captured');
+      syncBuilderFromAccelerator('');
       updateHotkeyDialog();
       return;
     }
@@ -588,6 +736,7 @@ function bindEvents() {
     capturedAccelerator = acc;
     $('hotkey-capture').textContent = formatHotkey(acc);
     $('hotkey-capture').classList.add('captured');
+    syncBuilderFromAccelerator(acc);
     updateHotkeyDialog();
   });
 

@@ -65,8 +65,21 @@
     <div class="modal modal-small">
       <h2 id="hotkey-title">Set hotkey</h2>
       <p class="muted" id="hotkey-app-name"></p>
-      <p>Press the desired key combination <em>(works globally, even when AppMute is in the background)</em>.</p>
+      <p>Press the desired key combination <em>(works globally, even when AppMute is in the background)</em>, or build one below with the dropdown.</p>
       <div id="hotkey-capture" class="hotkey-capture" tabindex="0">Press keys…</div>
+      <div class="hotkey-builder">
+        <div class="mod-row" role="group" aria-label="Modifiers">
+          <label class="mod-check"><input type="checkbox" id="hk-mod-ctrl" /> Ctrl</label>
+          <label class="mod-check"><input type="checkbox" id="hk-mod-alt" /> Alt</label>
+          <label class="mod-check"><input type="checkbox" id="hk-mod-shift" /> Shift</label>
+          <label class="mod-check"><input type="checkbox" id="hk-mod-super" /> Win / ⌘</label>
+        </div>
+        <label class="key-row">Key
+          <select id="hotkey-key-select" class="select">
+            <option value="">— Choose a key —</option>
+          </select>
+        </label>
+      </div>
       <div id="hotkey-conflict" class="conflict hidden" role="alert"></div>
       <div class="modal-actions">
         <button id="hotkey-clear" class="btn btn-danger-ghost" title="Remove the hotkey">Remove</button>
