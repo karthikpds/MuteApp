@@ -16,10 +16,10 @@ What AppMute does instead (honestly labelled in the UI):
 | QuickTime Player | ❌ | ✅ | AppleScript transport only |
 | Chrome, Edge, Safari, Firefox, Discord, YouTube Music, others | ❌ *Limited* | ❌ | No scriptable volume/transport; UI disables the actions and explains why |
 
-The main window shows a persistent banner on macOS, and each unsupported row
-carries a *Limited on macOS* pill plus the reason in its ⋮ menu. Remediation
-offered: mute inside the app (e.g. the browser tab) or install a virtual-audio
-driver such as Background Music.
+The main window shows a dismissible banner on macOS (per session), and each
+unsupported row carries a *Limited on macOS* pill plus the reason in its ⋮
+menu. Remediation offered: mute inside the app (e.g. the browser tab) or
+install a virtual-audio driver such as Background Music.
 
 macOS Accessibility note: enumerating GUI processes via System Events may
 require Automation permission; denial only degrades the Add dialog (the `ps`
@@ -58,7 +58,10 @@ Until `AudioController.exe` exists, mute actions fail with an explicit message
 pointing at `native/windows/README.md` — never a silent no-op. Edge cases
 handled: process with no active session (idle, not producing audio), process
 exited between listing and muting, multiple sessions per PID (all toggled
-together), previous volume preserved (mute ≠ volume change).
+together), multiple PIDs per process name (`--process` mute/toggle covers
+every `chrome.exe` at once and reports `matchedProcesses`), stale stored PIDs
+(automatic retry via process-name lookup when an app was closed and reopened),
+previous volume preserved (mute ≠ volume change).
 
 Pause/Resume is **not** offered on Windows: audio sessions expose no media
 transport; the menu item is disabled with that explanation.

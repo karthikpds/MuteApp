@@ -28,6 +28,7 @@ lib/
   autostart.js      — Run key / LaunchAgent
   platform.js       — capability flags + modifier names
 native/windows/    — AudioController.cpp + CMakeLists + README
+resources/         — tray.png / tray@2x.png / app-icon.png + generate-icons.py (stdlib-only PNG generator)
 ```
 
 ## Key flows
@@ -37,9 +38,23 @@ native/windows/    — AudioController.cpp + CMakeLists + README
 - **Status refresh:** main re-queries WASAPI sessions (Windows) or AppleScript volume (macOS) on `get-state` and every 15 s, so closed/reopened apps show *Not running* then recover automatically.
 - **Add dialog enrichment:** `list-processes` merges browser tab titles (macOS AppleScript, best-effort with denial-as-data) or top-level window titles (Windows `AudioController windows`); Helper/Renderer sub-process rows are hidden and Windows rows are grouped per process name since `--process` mute covers all of a name's sessions.
 - **Close button:** hidden to tray when `minimizeToTrayOnClose` is set; `Quit AppMute` in the tray menu exits fully.
+- **Single instance:** a second launch exits immediately and focuses the existing window (stale background processes therefore block startup visibly — see README troubleshooting).
+- **Load failures:** `did-fail-load` / `render-process-gone` surface error dialogs with reload, and `npm start -- --debug` forwards renderer console output to the terminal, so a blank window is always explainable.
 
 ## Verification performed
 
-- `npm test` — unit tests for hotkey utils, config store, platform/audio capability matrix, tasklist parsing.
-- `npx electron --version` + headless main-process smoke test (module load of all `lib/` files without Electron).
-- Manual UI run (`npm start`) on macOS; Windows WASAPI path verified by code review + standalone helper protocol (compile and run `list/toggle` on a Windows dev machine — CI note in `docs/LIMITATIONS.md`).
+- `npm test` — 26 tests: hotkey normalize/validate/format/conflicts, config
+  persistence/corruption/reset, platform/audio capability matrix, tasklist
+  parsing, picker ordering, AppleScript tab-output parsing, Automation-denial
+  handling, Helper-noise filtering, Windows process grouping, window-title
+  merge, picker subtitle/search, renderer DOM smoke (real `renderer.js`
+  against a stub DOM), element-id cross-check between renderer and HTML.
+- Live runs (`npm start`) on macOS, inspected over the DevTools protocol:
+  main-window render, Add dialog against a real running Chrome (tab
+  subtitles + title search, screenshot-verified), IPC error shapes,
+  single-instance lock behavior.
+- `npx electron --version` + smoke load of all `lib/` modules without Electron.
+- Windows native code (`AudioController.cpp`, incl. the `windows` command and
+  process-wide mute) verified by careful review only — it needs MSVC and must
+  still be compiled and exercised on a Windows machine
+  (`AudioController.exe list/windows/toggle --process chrome.exe`).
