@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('appMute', {
   toggleMute: (id) => invoke('appmute:toggle-mute', id),
   setMuted: (id, muted) => invoke('appmute:set-muted', id, muted),
   setHotkey: (id, accelerator, kind) => invoke('appmute:set-hotkey', id, accelerator, kind || 'mute'),
+  setHotkeyCapture: (active) => invoke('appmute:set-hotkey-capture', !!active),
   pause: (id) => invoke('appmute:pause', id),
   resume: (id) => invoke('appmute:resume', id),
   openApp: (id) => invoke('appmute:open-app', id),

@@ -402,6 +402,15 @@ function acceleratorFromEvent(e) {
 function openHotkeyDialog(id, kind) {
   hotkeyTargetId = id;
   hotkeyTargetKind = kind === 'pause' ? 'pause' : 'mute';
+  // Suspend global hotkey handlers while capturing so pressing an
+  // already-assigned combo shows the conflict warning instead of
+  // toggling the other app.
+  try {
+    const p = api.setHotkeyCapture && api.setHotkeyCapture(true);
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  } catch {
+    /* capture still works locally; main handlers just won't be suspended */
+  }
   const field = hotkeyTargetKind === 'pause' ? 'pauseHotkey' : 'hotkey';
   capturedAccelerator = '';
   const target = state.apps.find((a) => a.id === id);
@@ -421,6 +430,14 @@ function openHotkeyDialog(id, kind) {
 }
 
 function closeHotkeyDialog() {
+  if (hotkeyTargetId !== null) {
+    try {
+      const p = api.setHotkeyCapture && api.setHotkeyCapture(false);
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch {
+      /* ignore */
+    }
+  }
   $('modal-hotkey').classList.add('hidden');
   hotkeyTargetId = null;
   hotkeyTargetKind = 'mute';

@@ -24,6 +24,21 @@ let tray = null;
 let store = null;
 let audio = null;
 const pausedState = new Map(); // appId -> boolean (macOS pause tracking)
+// While the renderer is capturing a new hotkey combination, global hotkey
+// handlers must not fire. Otherwise pressing an already-assigned combo to
+// test it would toggle the other app instead of showing the conflict warning.
+let hotkeyCaptureActive = false;
+let hotkeyCaptureStartedAt = 0;
+const HOTKEY_CAPTURE_TIMEOUT_MS = 5 * 60 * 1000;
+
+function isCapturingHotkey() {
+  if (!hotkeyCaptureActive) return false;
+  if (Date.now() - hotkeyCaptureStartedAt > HOTKEY_CAPTURE_TIMEOUT_MS) {
+    hotkeyCaptureActive = false;
+    return false;
+  }
+  return true;
+}
 
 function ok(data) {
   return { ok: true, data };
@@ -187,6 +202,7 @@ function registerAllHotkeys() {
 }
 
 async function handleMuteHotkey(id) {
+  if (isCapturingHotkey()) return;
   const apps = store.getApps();
   const entry = apps.find((a) => a.id === id);
   if (!entry) return;
@@ -205,6 +221,7 @@ async function handleMuteHotkey(id) {
 }
 
 async function handlePauseHotkey(id) {
+  if (isCapturingHotkey()) return;
   const apps = store.getApps();
   const entry = apps.find((a) => a.id === id);
   if (!entry) return;
@@ -549,6 +566,16 @@ function setupIpc() {
       broadcastUpdate();
       notify(`${entry.name} — ${entry.muted ? 'Muted' : 'Unmuted'}`);
       return ok(entry);
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  ipcMain.handle('appmute:set-hotkey-capture', async (_e, active) => {
+    try {
+      hotkeyCaptureActive = !!active;
+      hotkeyCaptureStartedAt = Date.now();
+      return ok({ capturing: hotkeyCaptureActive });
     } catch (e) {
       return fail(e);
     }
