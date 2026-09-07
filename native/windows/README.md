@@ -18,10 +18,10 @@ AudioController.exe playpause
 
 Every command prints one JSON object (`{"ok":true,...}`).
 
-Pause/Resume are **system-wide** media keys (`VK_MEDIA_PAUSE` /
-`VK_MEDIA_PLAY` / `VK_MEDIA_PLAY_PAUSE`) driving the current Windows media
-(SMTC) session — e.g. YouTube Music. Unlike mute they are not per-PID:
-`--pid`/`--process` are accepted but ignored.
+Pause/Resume are **system-wide** media commands (`APPCOMMAND_MEDIA_PAUSE` /
+`APPCOMMAND_MEDIA_PLAY` / `APPCOMMAND_MEDIA_PLAY_PAUSE`) driving the current
+Windows media (SMTC) session — e.g. YouTube Music. Unlike mute they are not
+per-PID: `--pid`/`--process` are accepted but ignored.
 
 - `--pid` targets one process. `--process` (without `--pid`) targets **every**
   session with that process name and reports `matchedProcesses` — this is how

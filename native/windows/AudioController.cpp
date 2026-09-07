@@ -17,12 +17,15 @@
 // --pid targets one process; --process (no --pid) targets EVERY session
 // whose process name matches, e.g. all chrome.exe renderers at once.
 //
-// pause/resume/playpause send system media keys (VK_MEDIA_PAUSE /
-// VK_MEDIA_PLAY / VK_MEDIA_PLAY_PAUSE) to the OS media session. WASAPI
-// exposes no per-app transport control, so these act on whatever Windows
-// considers the current media session (e.g. YouTube Music in Chrome/Edge
-// or the desktop app) — not strictly per-PID. --pid/--process are accepted
-// but ignored for these commands.
+// pause/resume/playpause send WM_APPCOMMAND media commands
+// (APPCOMMAND_MEDIA_PAUSE / PLAY / PLAY_PAUSE) to the OS media session.
+// WASAPI exposes no per-app transport control, so these act on whatever
+// Windows considers the current media session (e.g. YouTube Music in
+// Chrome/Edge or the desktop app) — not strictly per-PID. --pid/--process
+// are accepted but ignored for these commands.
+// (Note: WinUser.h only defines VK_MEDIA_PLAY_PAUSE as a virtual key —
+// there are no discrete VK_MEDIA_PAUSE / VK_MEDIA_PLAY keys — so discrete
+// pause/resume go through WM_APPCOMMAND instead of keybd_event.)
 //
 // Every command prints exactly one JSON object to stdout:
 //   { "ok": true, ... }  or  { "ok": false, "error": "..." }
@@ -318,12 +321,24 @@ void PrintErr(const std::string& msg) {
     printf("{\"ok\":false,\"error\":\"%s\"}\n", JsonEscape(msg).c_str());
 }
 
-// System-wide media transport via virtual media keys. WASAPI has no
-// per-app pause, so this drives the current Windows media session (SMTC)
-// — e.g. YouTube Music in a browser or desktop player.
-void SendMediaKey(WORD vk) {
-    keybd_event((BYTE)vk, 0, 0, 0);
-    keybd_event((BYTE)vk, 0, KEYEVENTF_KEYUP, 0);
+// System-wide media transport via WM_APPCOMMAND. WASAPI has no per-app
+// pause, so this drives the current Windows media session (SMTC) — e.g.
+// YouTube Music in a browser or desktop player.
+#ifndef WM_APPCOMMAND
+#define WM_APPCOMMAND 0x0319
+#endif
+#ifndef APPCOMMAND_MEDIA_PAUSE
+#define APPCOMMAND_MEDIA_PAUSE 47
+#endif
+#ifndef APPCOMMAND_MEDIA_PLAY
+#define APPCOMMAND_MEDIA_PLAY 46
+#endif
+#ifndef APPCOMMAND_MEDIA_PLAY_PAUSE
+#define APPCOMMAND_MEDIA_PLAY_PAUSE 14
+#endif
+void SendAppCommand(DWORD appCommand) {
+    LPARAM lParam = (LPARAM)(appCommand << 16);
+    SendMessageW(HWND_BROADCAST, WM_APPCOMMAND, 0, lParam);
 }
 
 } // namespace
@@ -381,11 +396,11 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     if (cmd == L"pause" || cmd == L"resume" || cmd == L"playpause") {
-        // System-wide media keys; --pid/--process intentionally ignored
+        // System-wide media commands; --pid/--process intentionally ignored
         // (Windows has no per-app transport control).
-        if (cmd == L"pause") SendMediaKey(VK_MEDIA_PAUSE);
-        else if (cmd == L"resume") SendMediaKey(VK_MEDIA_PLAY);
-        else SendMediaKey(VK_MEDIA_PLAY_PAUSE);
+        if (cmd == L"pause") SendAppCommand(APPCOMMAND_MEDIA_PAUSE);
+        else if (cmd == L"resume") SendAppCommand(APPCOMMAND_MEDIA_PLAY);
+        else SendAppCommand(APPCOMMAND_MEDIA_PLAY_PAUSE);
         const char* state =
             (cmd == L"pause") ? "\"paused\":true" :
             (cmd == L"resume") ? "\"paused\":false" : "\"toggled\":true";

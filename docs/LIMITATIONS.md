@@ -63,8 +63,9 @@ every `chrome.exe` at once and reports `matchedProcesses`), stale stored PIDs
 (automatic retry via process-name lookup when an app was closed and reopened),
 previous volume preserved (mute ≠ volume change).
 
-Pause/Resume on Windows is **system-wide** via media keys
-(`VK_MEDIA_PAUSE` / `VK_MEDIA_PLAY` through `AudioController.exe pause|resume`):
+Pause/Resume on Windows is **system-wide** via media commands
+(`APPCOMMAND_MEDIA_PAUSE` / `APPCOMMAND_MEDIA_PLAY` through
+`AudioController.exe pause|resume`):
 WASAPI audio sessions expose no per-app media transport, so unlike mute this
 drives whatever Windows considers the current media (SMTC) session — e.g.
 YouTube Music in Chrome/Edge or a desktop player. If two players are active,
