@@ -37,10 +37,13 @@ jobs:
       - name: Smoke-test the helper binary
         # No args -> usage JSON on stdout, exit 1. Deterministic even with
         # no audio device on the runner; proves the binary executes.
+        # (Trailing `exit 0`: Actions fails pwsh steps on a nonzero final
+        # native exit code, and 1 is the *expected* result here.)
         working-directory: native/windows
         run: |
           .\AudioController.exe
           if ($LASTEXITCODE -ne 1) { throw "helper did not run as expected (exit=$LASTEXITCODE)" }
+          exit 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
