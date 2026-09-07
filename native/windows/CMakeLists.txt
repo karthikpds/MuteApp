@@ -6,8 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_executable(AudioController AudioController.cpp)
 
-# WASAPI / COM live in ole32; Psapi for process image names.
-target_link_libraries(AudioController PRIVATE ole32 psapi)
+# WASAPI / COM live in ole32; Psapi for process image names; user32 for the
+# `windows` command (EnumWindows).
+target_link_libraries(AudioController PRIVATE ole32 user32 psapi)
 
 if(MSVC)
   target_compile_definitions(AudioController PRIVATE UNICODE _UNICODE)

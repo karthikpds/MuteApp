@@ -51,7 +51,7 @@ session). The only requirement is compiling the helper once:
 
 ```bat
 cd native\windows
-cl /EHsc /std:c++17 /O2 AudioController.cpp /link ole32.lib psapi.lib
+cl /EHsc /std:c++17 /O2 AudioController.cpp /link ole32.lib user32.lib psapi.lib
 ```
 
 Until `AudioController.exe` exists, mute actions fail with an explicit message

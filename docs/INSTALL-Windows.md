@@ -41,7 +41,7 @@ cd MuteApp
 
 :: 1. Build the audio helper (true per-app mute needs this binary)
 cd native\windows
-cl /EHsc /std:c++17 /O2 AudioController.cpp /link ole32.lib psapi.lib
+cl /EHsc /std:c++17 /O2 AudioController.cpp /link ole32.lib user32.lib psapi.lib
 AudioController.exe
 :: ^ prints a usage error and exits 1 — that means the binary runs. cd back:
 cd ..\..

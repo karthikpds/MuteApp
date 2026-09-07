@@ -27,7 +27,7 @@ The UI runs without it, but muting needs the tiny WASAPI helper:
 
 ```bat
 cd native\windows
-cl /EHsc /std:c++17 /O2 AudioController.cpp /link ole32.lib psapi.lib
+cl /EHsc /std:c++17 /O2 AudioController.cpp /link ole32.lib user32.lib psapi.lib
 ```
 
 Details and CMake alternative: `native/windows/README.md`.

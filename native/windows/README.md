@@ -29,7 +29,7 @@ Option A — Visual Studio (x64 Native Tools Command Prompt):
 
 ```bat
 cd native\windows
-cl /EHsc /std:c++17 /O2 AudioController.cpp /link ole32.lib psapi.lib
+cl /EHsc /std:c++17 /O2 AudioController.cpp /link ole32.lib user32.lib psapi.lib
 ```
 
 Option B — CMake:

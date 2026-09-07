@@ -1,7 +1,7 @@
 // AudioController.cpp — AppMute Windows audio helper.
 //
 // True per-application mute via WASAPI audio sessions. No third-party
-// dependencies; links only against the Windows SDK (ole32).
+// dependencies; links only against the Windows SDK (ole32, user32, psapi).
 //
 // Usage:
 //   AudioController.exe list
