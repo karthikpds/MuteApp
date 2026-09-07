@@ -143,7 +143,7 @@ test('renderer renders header, cards and status bar from live state', async () =
   assert.match(badge.textContent, /macOS · limited/);
   const notice = elements.get('platform-notice');
   assert.equal(notice.classList.contains('hidden'), false);
-  assert.match(notice.innerHTML, /macOS limitation/);
+  assert.match(elements.get('platform-notice-text').innerHTML, /macOS limitation/);
 
   const list = elements.get('app-list');
   assert.equal(list.children.length, 2);

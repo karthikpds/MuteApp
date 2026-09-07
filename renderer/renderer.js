@@ -14,6 +14,7 @@ let processCache = [];
 let selectedProcess = null;
 let hotkeyTargetId = null;
 let capturedAccelerator = '';
+let noticeDismissed = false; // per-session dismissal of the platform notice
 
 const $ = (id) => document.getElementById(id);
 
@@ -81,19 +82,20 @@ function render() {
   }
 
   const notice = $('platform-notice');
-  if (state.platform === 'macos') {
+  const noticeText = $('platform-notice-text');
+  if (!noticeDismissed && state.platform === 'macos') {
     notice.classList.remove('hidden');
-    notice.innerHTML =
+    noticeText.innerHTML =
       '<strong>macOS limitation:</strong> macOS provides no system API for muting a single app. ' +
       'AppMute can control in-app volume for scriptable apps (e.g. Spotify) and pause/resume media apps. ' +
       'Browsers, Discord and similar apps are marked <em>Limited</em> — mute inside the app or use a virtual-audio driver.';
-  } else if (state.platform === 'windows' && window.__audioHelperMissing) {
+  } else if (!noticeDismissed && state.platform === 'windows' && window.__audioHelperMissing) {
     notice.classList.remove('hidden');
-    notice.textContent =
+    noticeText.textContent =
       'Windows audio helper (AudioController.exe) is missing — build native/windows first. See native/windows/README.md.';
   } else {
     notice.classList.add('hidden');
-    notice.textContent = '';
+    noticeText.textContent = '';
   }
 
   const list = $('app-list');
@@ -466,6 +468,10 @@ function toast(type, title, body = '') {
 
 function bindEvents() {
   $('btn-add').addEventListener('click', openAddDialog);
+  $('notice-dismiss').addEventListener('click', () => {
+    noticeDismissed = true;
+    $('platform-notice').classList.add('hidden');
+  });
   $('add-cancel').addEventListener('click', closeAddDialog);
   $('add-confirm').addEventListener('click', () => void confirmAdd());
   $('add-search').addEventListener('input', (e) => renderProcessList(e.target.value));

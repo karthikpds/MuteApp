@@ -6,7 +6,7 @@
  * through lib/audio-manager.js (platform-isolated backends).
  */
 
-const { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, Notification, nativeTheme, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, Tray, Menu, Notification, nativeTheme, shell, dialog } = require('electron');
 const path = require('path');
 
 const { ConfigStore } = require('./lib/config-store');
@@ -59,7 +59,37 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html')).catch((e) => {
+    dialog.showErrorBox('AppMute failed to load its interface', String((e && e.stack) || e));
+  });
+
+  // Never leave the user staring at a blank window without explanation.
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    dialog.showErrorBox('AppMute failed to load its interface', `${url}\n${desc} (code ${code})`);
+  });
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    dialog
+      .showMessageBox(mainWindow, {
+        type: 'error',
+        title: 'AppMute interface stopped',
+        message: `The interface process exited unexpectedly (${details.reason}). Your hotkeys keep working.`,
+        buttons: ['Reload interface', 'Quit AppMute'],
+        defaultId: 0,
+      })
+      .then(({ response }) => {
+        if (response === 0 && mainWindow && !mainWindow.isDestroyed()) mainWindow.reload();
+        else {
+          app.quitting = true;
+          app.quit();
+        }
+      });
+  });
+  if (process.argv.includes('--debug')) {
+    mainWindow.webContents.on('console-message', (_e, _level, message, line, source) => {
+      console.error(`[renderer] ${source}:${line} ${message}`);
+    });
+  }
 
   const saveBounds = () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -643,7 +673,6 @@ async function init() {
 init().catch((e) => {
   try {
     app.whenReady().then(() => {
-      const { dialog } = require('electron');
       dialog.showErrorBox('AppMute failed to start', String((e && e.stack) || e));
     });
   } finally {
