@@ -5,10 +5,14 @@
 //
 // Usage:
 //   AudioController.exe list
+//   AudioController.exe windows
 //   AudioController.exe mute   --pid 1234 | --process chrome.exe
 //   AudioController.exe unmute --pid 1234 | --process chrome.exe
 //   AudioController.exe toggle --pid 1234 | --process chrome.exe
 //   AudioController.exe status --pid 1234 | --process chrome.exe
+//
+// --pid targets one process; --process (no --pid) targets EVERY session
+// whose process name matches, e.g. all chrome.exe renderers at once.
 //
 // Every command prints exactly one JSON object to stdout:
 //   { "ok": true, ... }  or  { "ok": false, "error": "..." }
@@ -75,6 +79,18 @@ std::wstring Lower(std::wstring s) {
 std::wstring BaseName(const std::wstring& p) {
     size_t i = p.find_last_of(L"\\/");
     return i == std::wstring::npos ? p : p.substr(i + 1);
+}
+
+// Compare process names ignoring case, path, and a trailing ".exe" so that
+// "chrome", "chrome.exe" and "C:\...\chrome.exe" all match "chrome.exe".
+bool MatchesProcess(const std::wstring& have, const std::wstring& want) {
+    auto strip = [](std::wstring s) {
+        s = Lower(BaseName(s));
+        if (s.size() > 4 && s.compare(s.size() - 4, 4, L".exe") == 0) s.resize(s.size() - 4);
+        return s;
+    };
+    if (want.empty()) return false;
+    return strip(have) == strip(want);
 }
 
 std::wstring ExePathForPid(DWORD pid) {
@@ -223,14 +239,65 @@ bool ResolvePid(DWORD& pid, const std::wstring& processFilter, std::string& erro
     if (processFilter.empty()) { error = "Missing --pid or --process."; return false; }
     std::vector<Session> sessions;
     if (!EnumerateSessions(sessions, error)) return false;
-    std::wstring want = Lower(BaseName(processFilter));
-    // Allow "chrome" to match "chrome.exe".
     for (const auto& s : sessions) {
-        std::wstring have = Lower(s.processName);
-        if (have == want || have == want + L".exe") { pid = s.pid; return true; }
+        if (MatchesProcess(s.processName, processFilter)) { pid = s.pid; return true; }
     }
     error = "Process is not currently running or has no audio session.";
     return false;
+}
+
+// Mute/unmute/toggle across EVERY session whose process matches `filter`
+// (e.g. all chrome.exe renderers). Returns false when nothing matched.
+bool ForEachProcessSession(const std::wstring& filter,
+                           const std::function<bool(ISimpleAudioVolume*)>& fn,
+                           std::string& error, int& matchedProcesses) {
+    std::vector<Session> sessions;
+    if (!EnumerateSessions(sessions, error)) return false;
+    std::vector<DWORD> pids;
+    for (const auto& s : sessions) {
+        if (!MatchesProcess(s.processName, filter)) continue;
+        bool dup = false;
+        for (DWORD p : pids) if (p == s.pid) { dup = true; break; }
+        if (!dup) pids.push_back(s.pid);
+    }
+    if (pids.empty()) {
+        error = "Process is not currently running or has no audio session.";
+        return false;
+    }
+    matchedProcesses = 0;
+    std::string lastError;
+    for (DWORD p : pids) {
+        std::string perPidError;
+        if (ForEachPidSession(p, fn, perPidError)) matchedProcesses++;
+        else lastError = perPidError;
+    }
+    if (matchedProcesses == 0) { error = lastError; return false; }
+    return true;
+}
+
+struct TopWindow {
+    DWORD pid = 0;
+    std::wstring title;
+};
+
+static BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
+    auto* out = reinterpret_cast<std::vector<TopWindow>*>(lParam);
+    if (!IsWindowVisible(hwnd)) return TRUE;
+    // Skip non-application windows (tooltips, menus) via extended styles.
+    LONG_PTR ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    if (ex & WS_EX_TOOLWINDOW) return TRUE;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid == 0) return TRUE;
+    int len = GetWindowTextLengthW(hwnd);
+    if (len <= 0) return TRUE;
+    if (len > 200) len = 200; // picker identification only; keeps JSON buffers bounded
+    std::wstring title(static_cast<size_t>(len) + 1, L'\0');
+    GetWindowTextW(hwnd, title.data(), len + 1);
+    title.resize(static_cast<size_t>(len));
+    if (title.empty()) return TRUE;
+    out->push_back({ pid, title });
+    return TRUE;
 }
 
 void PrintOk(const std::string& extra) {
@@ -244,7 +311,7 @@ void PrintErr(const std::string& msg) {
 } // namespace
 
 int wmain(int argc, wchar_t** argv) {
-    if (argc < 2) { PrintErr("Usage: AudioController.exe <list|mute|unmute|toggle|status> [--pid N] [--process name]"); return 1; }
+    if (argc < 2) { PrintErr("Usage: AudioController.exe <list|windows|mute|unmute|toggle|status> [--pid N] [--process name]"); return 1; }
     std::wstring cmd = Lower(argv[1]);
     DWORD pid = 0;
     std::wstring processFilter;
@@ -254,8 +321,7 @@ int wmain(int argc, wchar_t** argv) {
         else if (a == L"--process" && i + 1 < argc) processFilter = argv[++i];
     }
 
-    if (cmd == L"list") {
-        std::vector<Session> sessions;
+    if (cmd == L"list") {        std::vector<Session> sessions;
         std::string error;
         if (!EnumerateSessions(sessions, error)) { PrintErr(error); return 1; }
         std::string items;
@@ -276,10 +342,57 @@ int wmain(int argc, wchar_t** argv) {
         return 0;
     }
 
+    if (cmd == L"windows") {
+        // Top-level visible application windows with owning PID and title.
+        // No special permissions required. Browser titles carry the active
+        // tab, e.g. "YouTube - Google Chrome".
+        std::vector<TopWindow> wins;
+        EnumWindows(EnumWindowsProc, reinterpret_cast<LPARAM>(&wins));
+        std::string items;
+        size_t n = 0;
+        for (const auto& w : wins) {
+            if (n++ >= 500) break;
+            char buf[1400];
+            snprintf(buf, sizeof(buf), "%s{\"pid\":%lu,\"title\":\"%s\"}",
+                     n > 1 ? "," : "", (unsigned long)w.pid,
+                     JsonEscape(WideToUtf8(w.title)).c_str());
+            items += buf;
+        }
+        PrintOk("\"windows\":[" + items + "]");
+        return 0;
+    }
+
     if (cmd == L"mute" || cmd == L"unmute" || cmd == L"toggle" || cmd == L"status") {
         std::string error;
-        if (!ResolvePid(pid, processFilter, error)) { PrintErr(error); return 1; }
         const GUID ctx = GUID_NULL;
+        const bool processWide = (pid == 0 && !processFilter.empty());
+        if ((cmd == L"mute" || cmd == L"unmute") && processWide) {
+            const BOOL target = (cmd == L"mute") ? TRUE : FALSE;
+            int matched = 0;
+            if (!ForEachProcessSession(processFilter,
+                    [&](ISimpleAudioVolume* v) { v->SetMute(target, &ctx); return true; },
+                    error, matched)) { PrintErr(error); return 1; }
+            char buf[192];
+            snprintf(buf, sizeof(buf), "\"matchedProcesses\":%d,\"muted\":%s",
+                     matched, target ? "true" : "false");
+            PrintOk(buf); return 0;
+        }
+        if (!ResolvePid(pid, processFilter, error)) { PrintErr(error); return 1; }
+        if (cmd == L"toggle" && processWide) {
+            // Read state from the first matching session, apply to all.
+            bool target = true;
+            bool read = false;
+            int matched = 0;
+            if (!ForEachProcessSession(processFilter,
+                    [&](ISimpleAudioVolume* v) {
+                        if (!read) { BOOL m = FALSE; if (SUCCEEDED(v->GetMute(&m))) target = !m; read = true; }
+                        v->SetMute(target ? TRUE : FALSE, &ctx); return true;
+                    }, error, matched)) { PrintErr(error); return 1; }
+            char buf[192];
+            snprintf(buf, sizeof(buf), "\"matchedProcesses\":%d,\"muted\":%s",
+                     matched, target ? "true" : "false");
+            PrintOk(buf); return 0;
+        }
         if (cmd == L"mute") {
             if (!ForEachPidSession(pid, [&](ISimpleAudioVolume* v) { v->SetMute(TRUE, &ctx); return true; }, error)) { PrintErr(error); return 1; }
             char buf[128]; snprintf(buf, sizeof(buf), "\"pid\":%lu,\"muted\":true", (unsigned long)pid);
@@ -315,6 +428,6 @@ int wmain(int argc, wchar_t** argv) {
         return 1;
     }
 
-    PrintErr("Unknown command. Use list|mute|unmute|toggle|status.");
+    PrintErr("Unknown command. Use list|windows|mute|unmute|toggle|status.");
     return 1;
 }

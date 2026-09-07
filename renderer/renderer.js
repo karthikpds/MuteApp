@@ -264,13 +264,23 @@ function openAddDialog() {
   $('add-search').value = '';
   selectedProcess = null;
   $('add-confirm').disabled = true;
+  $('add-hint').classList.add('hidden');
+  $('add-hint').textContent = '';
   $('add-list').innerHTML = '<p class="muted">Loading running applications…</p>';
   api.listProcesses().then((res) => {
     if (!res.ok) {
       $('add-list').innerHTML = `<p class="muted">Could not list applications: ${escapeHtml(res.error)}</p>`;
       return;
     }
-    processCache = res.data || [];
+    // Main returns { apps, tabDenials } (array form tolerated for safety).
+    const payload = res.data || {};
+    processCache = Array.isArray(payload) ? payload : payload.apps || [];
+    const denials = Array.isArray(payload) ? [] : payload.tabDenials || [];
+    if (denials.length > 0) {
+      const hint = $('add-hint');
+      hint.textContent = denials[0]; // how to enable tab titles; shown once, inline
+      hint.classList.remove('hidden');
+    }
     renderProcessList('');
   }).catch((e) => {
     $('add-list').innerHTML = `<p class="muted">Could not list applications: ${escapeHtml(String((e && e.message) || e))}</p>`;
@@ -282,12 +292,37 @@ function closeAddDialog() {
   $('modal-add').classList.add('hidden');
 }
 
+/** Search matches names, tab titles/URLs, and window titles — not just processes. */
+function processMatches(p, q) {
+  if (!q) return true;
+  if ((p.name || '').toLowerCase().includes(q)) return true;
+  if ((p.processName || '').toLowerCase().includes(q)) return true;
+  if ((p.activeTabTitle || '').toLowerCase().includes(q)) return true;
+  if ((p.windowTitles || []).some((t) => t.toLowerCase().includes(q))) return true;
+  if ((p.tabs || []).some((t) => (t.title || '').toLowerCase().includes(q) || (t.url || '').toLowerCase().includes(q))) return true;
+  return false;
+}
+
+/** Second line of a picker row: tab/window identification, then process identity. */
+function processSubtitle(p) {
+  const bits = [];
+  if (p.activeTabTitle) {
+    bits.push(`▶ ${p.activeTabTitle}`);
+    if (p.totalTabs > 1) bits.push(`${p.totalTabs} tabs`);
+  } else if (p.windowTitles && p.windowTitles.length) {
+    bits.push(`🪟 ${p.windowTitles[0]}`);
+    if (p.windowTitles.length > 1) bits.push(`+${p.windowTitles.length - 1} more`);
+  }
+  bits.push(p.processName || p.name || '');
+  if (p.grouped && p.processCount > 1) bits.push(`${p.processCount} processes`);
+  else if (p.pid) bits.push(`PID ${p.pid}`);
+  return bits.filter(Boolean).join(' · ');
+}
+
 function renderProcessList(filter) {
   const q = filter.trim().toLowerCase();
   const tracked = new Set(state.apps.map((a) => a.name.toLowerCase()));
-  const items = processCache
-    .filter((p) => !q || (p.name || '').toLowerCase().includes(q) || (p.processName || '').toLowerCase().includes(q))
-    .slice(0, 200);
+  const items = processCache.filter((p) => processMatches(p, q)).slice(0, 200);
   const box = $('add-list');
   box.innerHTML = '';
   if (items.length === 0) {
@@ -301,7 +336,7 @@ function renderProcessList(filter) {
     el.innerHTML = `
       <div class="pick-avatar">${escapeHtml((p.name || '?').charAt(0).toUpperCase())}</div>
       <div><div class="pick-name">${escapeHtml(p.name)}${already ? ' (added)' : ''}</div>
-      <div class="pick-sub">${escapeHtml(p.processName || '')}${p.pid ? ` · PID ${p.pid}` : ''}</div></div>`;
+      <div class="pick-sub">${escapeHtml(processSubtitle(p))}</div></div>`;
     el.addEventListener('click', () => {
       selectedProcess = p;
       $('add-confirm').disabled = !!already;

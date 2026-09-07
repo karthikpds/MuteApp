@@ -40,7 +40,10 @@ npm run dist:mac   # DMG (run on macOS)
 
 ## Usage
 
-1. Click **+ Add App**, search, select, **Add**.
+1. Click **+ Add App**, search, select, **Add**. The picker shows browser tab
+   titles (e.g. `Google Chrome — ▶ YouTube`) so you can find the right app;
+   Helper/Renderer sub-processes are hidden and selecting a tab adds its
+   parent browser (muting is per-process, not per-tab).
 2. Click **Set hotkey** on the row, press e.g. `Ctrl + Alt + Y`, **Save**.
 3. Press the hotkey anywhere — the app toggles, others keep playing.
 4. `⋮` menu: Mute/Unmute, Set Hotkey, Pause/Resume (if supported), Open, Remove.

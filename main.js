@@ -390,7 +390,29 @@ function setupIpc() {
 
   ipcMain.handle('appmute:list-processes', async () => {
     try {
-      return ok(await processList.listProcesses());
+      const apps = await processList.listProcesses();
+      let tabDenials = [];
+      if (isMac) {
+        // Best-effort browser tab titles for identification (AppleScript).
+        // Never rejects the picker: denial/timeout just leaves process rows.
+        try {
+          const macTabs = require('./lib/browser-tabs-macos');
+          const info = await macTabs.listBrowserTabs({ timeout: 8000 });
+          tabDenials = macTabs.enrichWithTabs(apps, info).tabDenials;
+        } catch {
+          /* process list still usable */
+        }
+      } else if (isWin) {
+        // Best-effort top-level window titles (active tab per browser window).
+        try {
+          if (typeof audio.listWindowsWithProcess === 'function') {
+            processList.attachWindowTitles(apps, await audio.listWindowsWithProcess());
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      return ok({ apps, tabDenials });
     } catch (e) {
       return fail(e);
     }

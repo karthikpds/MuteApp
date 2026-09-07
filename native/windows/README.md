@@ -6,6 +6,7 @@ is a dependency-free C++ CLI (Windows SDK only) that the Electron layer calls:
 
 ```
 AudioController.exe list
+AudioController.exe windows
 AudioController.exe mute   --pid 1234
 AudioController.exe unmute --process chrome.exe
 AudioController.exe toggle --pid 1234
@@ -13,6 +14,14 @@ AudioController.exe status --pid 1234
 ```
 
 Every command prints one JSON object (`{"ok":true,...}`).
+
+- `--pid` targets one process. `--process` (without `--pid`) targets **every**
+  session with that process name and reports `matchedProcesses` — this is how
+  AppMute reliably mutes Chrome no matter which `chrome.exe` sub-process
+  renders the audio.
+- `windows` lists visible top-level windows as
+  `{"windows":[{"pid":N,"title":"YouTube - Google Chrome"}, ...]}` for picker
+  identification (active tab per browser window). Needs no permissions.
 
 ## Build
 
@@ -44,6 +53,7 @@ AppMute looks for the binary in (first hit wins):
 
 ```bat
 AudioController.exe list
+AudioController.exe windows
 AudioController.exe status --process chrome.exe
 AudioController.exe toggle --process chrome.exe
 ```

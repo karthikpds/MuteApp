@@ -24,6 +24,7 @@ lib/
   hotkey-utils.js   — pure normalize/validate/format/conflict (unit-tested)
   config-store.js   — JSON persistence (unit-tested)
   process-list.js   — tasklist/ps enumeration for the Add dialog
+  browser-tabs-macos.js — AppleScript tab titles (identification only)
   autostart.js      — Run key / LaunchAgent
   platform.js       — capability flags + modifier names
 native/windows/    — AudioController.cpp + CMakeLists + README
@@ -34,6 +35,7 @@ native/windows/    — AudioController.cpp + CMakeLists + README
 - **Toggle via hotkey:** `globalShortcut` → `handleHotkeyToggle(id)` → `audio.toggleMuted(entry)` → persist → `apps-updated` event → tray refresh + OS notification.
 - **Set hotkey:** renderer captures combo → main validates → conflict-check against stored apps → `unregister(old)` + `register(new)` → persist only if the OS accepted it.
 - **Status refresh:** main re-queries WASAPI sessions (Windows) or AppleScript volume (macOS) on `get-state` and every 15 s, so closed/reopened apps show *Not running* then recover automatically.
+- **Add dialog enrichment:** `list-processes` merges browser tab titles (macOS AppleScript, best-effort with denial-as-data) or top-level window titles (Windows `AudioController windows`); Helper/Renderer sub-process rows are hidden and Windows rows are grouped per process name since `--process` mute covers all of a name's sessions.
 - **Close button:** hidden to tray when `minimizeToTrayOnClose` is set; `Quit AppMute` in the tray menu exits fully.
 
 ## Verification performed

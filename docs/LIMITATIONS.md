@@ -25,6 +25,25 @@ macOS Accessibility note: enumerating GUI processes via System Events may
 require Automation permission; denial only degrades the Add dialog (the `ps`
 fallback still lists processes).
 
+## Tab/window titles in the picker (identification only)
+
+The Add dialog shows browser tab titles so you can find e.g. your YouTube tab:
+
+- **macOS:** every tab's title + URL for Chrome, Edge, Brave, Arc, Opera,
+  Vivaldi, and Safari via AppleScript. First use triggers a macOS Automation
+  prompt per browser ("AppMute would like to control Google Chrome"); denying
+  it only hides tab titles, everything else keeps working. Firefox exposes no
+  tab API on macOS and can never show tabs here.
+- **Windows:** top-level window titles via the AudioController `windows`
+  command (no permissions needed). A window title carries the *active* tab
+  ("YouTube - Google Chrome"); background tabs are not enumerable without
+  relaunching the browser with debug flags, which AppMute will not do.
+
+Showing a tab title does **not** mean per-tab muting: mute granularity is the
+whole process on both platforms. Selecting the "YouTube" row adds Google
+Chrome, and muting mutes all of Chrome's audio. Tab titles/URLs are kept in
+memory only and are never written to the config file.
+
 ## Windows: true mute, one build step
 
 Windows supports real per-app mute via WASAPI (`ISimpleAudioVolume` per audio

@@ -132,6 +132,28 @@ test('every element id used in renderer.js exists in index.html', () => {
   }
 });
 
+test('picker subtitle and search cover tab and window titles', () => {
+  const { sandbox } = buildSandbox();
+  vm.runInContext(RENDERER_SRC, sandbox, { filename: 'renderer.js' });
+  const chrome = {
+    name: 'Google Chrome', processName: 'Google Chrome', pid: 111,
+    activeTabTitle: 'YouTube', totalTabs: 5,
+  };
+  assert.equal(sandbox.processSubtitle(chrome), '▶ YouTube · 5 tabs · Google Chrome · PID 111');
+  assert.equal(sandbox.processMatches(chrome, 'youtube'), true);
+  assert.equal(sandbox.processMatches(chrome, 'chrome'), true);
+  assert.equal(sandbox.processMatches(chrome, 'zzz-no-match'), false);
+  const winGrouped = {
+    name: 'chrome', processName: 'chrome.exe', pid: 0, grouped: true, processCount: 12,
+    windowTitles: ['YouTube - Google Chrome'],
+  };
+  assert.equal(
+    sandbox.processSubtitle(winGrouped),
+    '🪟 YouTube - Google Chrome · chrome.exe · 12 processes'
+  );
+  assert.equal(sandbox.processMatches(winGrouped, 'youtube'), true);
+});
+
 test('renderer renders header, cards and status bar from live state', async () => {
   const { sandbox, elements, docListeners } = buildSandbox();
   vm.runInContext(RENDERER_SRC, sandbox, { filename: 'renderer.js' });
