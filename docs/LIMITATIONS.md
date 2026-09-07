@@ -63,13 +63,16 @@ every `chrome.exe` at once and reports `matchedProcesses`), stale stored PIDs
 (automatic retry via process-name lookup when an app was closed and reopened),
 previous volume preserved (mute ≠ volume change).
 
-Pause/Resume on Windows is **system-wide** via media commands
-(`APPCOMMAND_MEDIA_PAUSE` / `APPCOMMAND_MEDIA_PLAY` through
-`AudioController.exe pause|resume`):
-WASAPI audio sessions expose no per-app media transport, so unlike mute this
-drives whatever Windows considers the current media (SMTC) session — e.g.
-YouTube Music in Chrome/Edge or a desktop player. If two players are active,
-it hits the current one, not necessarily the row you clicked.
+Pause/Resume on Windows posts media commands (`APPCOMMAND_MEDIA_PAUSE` /
+`APPCOMMAND_MEDIA_PLAY` through `AudioController.exe pause|resume --process
+<name>`) to the target app's own windows — e.g. all `chrome.exe` windows for
+YouTube Music — falling back to a hung-safe broadcast to the current media
+(SMTC) session when no window matches. Unlike mute this is window-targeted,
+not audio-session targeted: with several players active it can still hit the
+current one, not necessarily the row you clicked. If Resume seems dead after
+Pause, rebuild `AudioController.exe` (pre-targeting builds used a blocking
+broadcast that could deliver out of order) and prefer `--process` over a
+stale PID.
 
 ## Global hotkeys
 

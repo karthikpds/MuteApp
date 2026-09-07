@@ -19,10 +19,11 @@
 //
 // pause/resume/playpause send WM_APPCOMMAND media commands
 // (APPCOMMAND_MEDIA_PAUSE / PLAY / PLAY_PAUSE) to the OS media session.
-// WASAPI exposes no per-app transport control, so these act on whatever
-// Windows considers the current media session (e.g. YouTube Music in
-// Chrome/Edge or the desktop app) — not strictly per-PID. --pid/--process
-// are accepted but ignored for these commands.
+// WASAPI exposes no per-app transport control: --process targets every
+// top-level window of that process (e.g. all chrome.exe windows, so the
+// YouTube Music tab is hit no matter which sub-process was picked),
+// --pid targets one process's windows, and with neither the command falls
+// back to a hung-safe broadcast (current SMTC session).
 // (Note: WinUser.h only defines VK_MEDIA_PLAY_PAUSE as a virtual key —
 // there are no discrete VK_MEDIA_PAUSE / VK_MEDIA_PLAY keys — so discrete
 // pause/resume go through WM_APPCOMMAND instead of keybd_event.)
@@ -322,8 +323,15 @@ void PrintErr(const std::string& msg) {
 }
 
 // System-wide media transport via WM_APPCOMMAND. WASAPI has no per-app
-// pause, so this drives the current Windows media session (SMTC) — e.g.
-// YouTube Music in a browser or desktop player.
+// pause, so this drives the Windows media session (SMTC) — e.g. YouTube
+// Music in a browser or desktop player.
+//
+// Delivery matters: SendMessageW(HWND_BROADCAST, ...) is synchronous and
+// blocks on hung windows (freezing the helper / Electron IPC and causing
+// out-of-order pause→resume glitches), and a broadcast PLAY is easily
+// consumed by the wrong app. So we prefer targeted async PostMessageW to
+// the target app's own top-level windows (wParam = hwnd, per docs), and
+// only fall back to a hung-safe broadcast when no target window is found.
 #ifndef WM_APPCOMMAND
 #define WM_APPCOMMAND 0x0319
 #endif
@@ -336,9 +344,69 @@ void PrintErr(const std::string& msg) {
 #ifndef APPCOMMAND_MEDIA_PLAY_PAUSE
 #define APPCOMMAND_MEDIA_PLAY_PAUSE 14
 #endif
-void SendAppCommand(DWORD appCommand) {
+
+struct TargetWindow {
+    DWORD pid = 0;
+    HWND hwnd = nullptr;
+};
+
+static BOOL CALLBACK EnumMediaWindowsProc(HWND hwnd, LPARAM lParam) {
+    auto* out = reinterpret_cast<std::vector<TargetWindow>*>(lParam);
+    if (!IsWindowVisible(hwnd)) return TRUE;
+    LONG_PTR ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    if (ex & WS_EX_TOOLWINDOW) return TRUE;
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid == 0 || hwnd == nullptr) return TRUE;
+    out->push_back({ pid, hwnd });
+    return TRUE;
+}
+
+void PostAppCommandToHwnd(HWND hwnd, DWORD appCommand) {
     LPARAM lParam = (LPARAM)(appCommand << 16);
-    SendMessageW(HWND_BROADCAST, WM_APPCOMMAND, 0, lParam);
+    PostMessageW(hwnd, WM_APPCOMMAND, (WPARAM)hwnd, lParam);
+}
+
+// Post a media command to every top-level window owned by pid.
+int PostAppCommandToPid(DWORD pid, DWORD appCommand) {
+    std::vector<TargetWindow> wins;
+    EnumWindows(EnumMediaWindowsProc, reinterpret_cast<LPARAM>(&wins));
+    int matched = 0;
+    for (const auto& w : wins) {
+        if (w.pid == pid) {
+            PostAppCommandToHwnd(w.hwnd, appCommand);
+            matched++;
+        }
+    }
+    return matched;
+}
+
+// Post a media command to every top-level window whose process matches
+// filter (same matching as mute: case/path/.exe-insensitive). This covers
+// all chrome.exe windows at once, so the stored PID can't go stale and the
+// YouTube Music tab is hit no matter which sub-process was picked.
+int PostAppCommandToProcess(const std::wstring& filter, DWORD appCommand) {
+    std::vector<TargetWindow> wins;
+    EnumWindows(EnumMediaWindowsProc, reinterpret_cast<LPARAM>(&wins));
+    int matched = 0;
+    for (const auto& w : wins) {
+        std::wstring exe = ExePathForPid(w.pid);
+        std::wstring base = BaseName(exe);
+        if (MatchesProcess(base.empty() ? L"" : base, filter)) {
+            PostAppCommandToHwnd(w.hwnd, appCommand);
+            matched++;
+        }
+    }
+    return matched;
+}
+
+// Hung-safe broadcast fallback (no specific window found / no identity).
+// SendMessageTimeoutW returns immediately on hung windows instead of
+// freezing the helper past the Electron 8s exec timeout.
+void BroadcastAppCommand(DWORD appCommand) {
+    LPARAM lParam = (LPARAM)(appCommand << 16);
+    SendMessageTimeoutW(HWND_BROADCAST, WM_APPCOMMAND, 0, lParam,
+                        SMTO_ABORTIFHUNG | SMTO_BLOCK, 2000, nullptr);
 }
 
 } // namespace
@@ -396,15 +464,28 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     if (cmd == L"pause" || cmd == L"resume" || cmd == L"playpause") {
-        // System-wide media commands; --pid/--process intentionally ignored
-        // (Windows has no per-app transport control).
-        if (cmd == L"pause") SendAppCommand(APPCOMMAND_MEDIA_PAUSE);
-        else if (cmd == L"resume") SendAppCommand(APPCOMMAND_MEDIA_PLAY);
-        else SendAppCommand(APPCOMMAND_MEDIA_PLAY_PAUSE);
+        DWORD appCmd = (cmd == L"pause") ? APPCOMMAND_MEDIA_PAUSE
+            : (cmd == L"resume") ? APPCOMMAND_MEDIA_PLAY
+            : APPCOMMAND_MEDIA_PLAY_PAUSE;
+        // Prefer targeted delivery: process-wide first (stale-PID-proof,
+        // covers all browser windows), then single PID, else broadcast.
+        int matchedWindows = 0;
+        const char* method = "broadcast";
+        if (!processFilter.empty()) {
+            matchedWindows = PostAppCommandToProcess(processFilter, appCmd);
+            if (matchedWindows > 0) method = "targeted";
+        } else if (pid != 0) {
+            matchedWindows = PostAppCommandToPid(pid, appCmd);
+            if (matchedWindows > 0) method = "targeted";
+        }
+        if (matchedWindows == 0) BroadcastAppCommand(appCmd);
         const char* state =
             (cmd == L"pause") ? "\"paused\":true" :
             (cmd == L"resume") ? "\"paused\":false" : "\"toggled\":true";
-        PrintOk(state);
+        char buf[256];
+        snprintf(buf, sizeof(buf), "%s,\"matchedWindows\":%d,\"method\":\"%s\"",
+                 state, matchedWindows, method);
+        PrintOk(buf);
         return 0;
     }
 

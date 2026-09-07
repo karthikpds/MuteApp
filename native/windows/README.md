@@ -18,10 +18,15 @@ AudioController.exe playpause
 
 Every command prints one JSON object (`{"ok":true,...}`).
 
-Pause/Resume are **system-wide** media commands (`APPCOMMAND_MEDIA_PAUSE` /
-`APPCOMMAND_MEDIA_PLAY` / `APPCOMMAND_MEDIA_PLAY_PAUSE`) driving the current
-Windows media (SMTC) session — e.g. YouTube Music. Unlike mute they are not
-per-PID: `--pid`/`--process` are accepted but ignored.
+Pause/Resume post `APPCOMMAND_MEDIA_PAUSE` / `APPCOMMAND_MEDIA_PLAY` /
+`APPCOMMAND_MEDIA_PLAY_PAUSE` to the target app's own top-level windows
+(`--process chrome.exe` reaches all Chrome windows, so the YouTube Music tab
+is hit regardless of sub-process PID; `--pid` targets one process). With no
+match it falls back to a hung-safe broadcast to the current Windows media
+(SMTC) session. Unlike mute this is window-targeted, not audio-session
+targeted, so with several players active it can still hit the current one.
+`pause`/`resume` report `matchedWindows` and `method:"targeted"|"broadcast"`.
+Test with the process name first (stale-PID-proof for browsers):
 
 - `--pid` targets one process. `--process` (without `--pid`) targets **every**
   session with that process name and reports `matchedProcesses` — this is how
@@ -64,8 +69,8 @@ AudioController.exe list
 AudioController.exe windows
 AudioController.exe status --process chrome.exe
 AudioController.exe toggle --process chrome.exe
-AudioController.exe pause
-AudioController.exe resume
+AudioController.exe pause --process chrome.exe
+AudioController.exe resume --process chrome.exe
 ```
 
 ## Troubleshooting
