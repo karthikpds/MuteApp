@@ -131,22 +131,40 @@ function showWindow() {
 // Hotkeys
 // ---------------------------------------------------------------------------
 
-function unregisterHotkey(appEntry) {
+/** Hotkey slot field: 'mute' -> hotkey, 'pause' -> pauseHotkey. */
+function hotkeyField(kind) {
+  return kind === 'pause' ? 'pauseHotkey' : 'hotkey';
+}
+
+function unregisterHotkeyKind(appEntry, kind) {
   try {
-    if (appEntry.hotkey) globalShortcut.unregister(appEntry.hotkey);
+    const acc = appEntry[hotkeyField(kind)];
+    if (acc) globalShortcut.unregister(acc);
   } catch {
     /* ignore */
   }
 }
 
-function registerHotkey(appEntry) {
-  if (!appEntry.hotkey) return { ok: true };
-  const v = hotkeyUtils.validateAccelerator(appEntry.hotkey);
+function unregisterHotkey(appEntry) {
+  unregisterHotkeyKind(appEntry, 'mute');
+  unregisterHotkeyKind(appEntry, 'pause');
+}
+
+function registerHotkeyKind(appEntry, kind) {
+  const acc = appEntry[hotkeyField(kind)];
+  if (!acc) return { ok: true };
+  const v = hotkeyUtils.validateAccelerator(acc);
   if (!v.ok) return { ok: false, reason: v.reason };
+  const handler =
+    kind === 'pause'
+      ? () => {
+          void handlePauseHotkey(appEntry.id);
+        }
+      : () => {
+          void handleMuteHotkey(appEntry.id);
+        };
   try {
-    const registered = globalShortcut.register(appEntry.hotkey, () => {
-      void handleHotkeyToggle(appEntry.id);
-    });
+    const registered = globalShortcut.register(acc, handler);
     if (!registered) {
       return { ok: false, reason: 'Hotkey is already taken (by the OS or another program) and could not be registered.' };
     }
@@ -159,83 +177,61 @@ function registerHotkey(appEntry) {
 function registerAllHotkeys() {
   const failures = [];
   for (const a of store.getApps()) {
-    if (!a.hotkey) continue;
-    const r = registerHotkey(a);
-    if (!r.ok) failures.push({ name: a.name, reason: r.reason });
+    for (const kind of ['mute', 'pause']) {
+      if (!a[hotkeyField(kind)]) continue;
+      const r = registerHotkeyKind(a, kind);
+      if (!r.ok) failures.push({ name: a.name, kind, reason: r.reason });
+    }
   }
   return failures;
 }
 
-async function handleHotkeyToggle(id) {
+async function handleMuteHotkey(id) {
+  const apps = store.getApps();
+  const entry = apps.find((a) => a.id === id);
+  if (!entry) return;
+  try {
+    const res = await audio.toggleMuted(entry);
+    entry.muted = !!res.muted;
+    entry.emulated = !!res.emulated;
+    entry.lastChanged = Date.now();
+    store.setApps(apps);
+    broadcastUpdate();
+    notify(`${entry.name} — ${entry.muted ? 'Muted' : 'Unmuted'}`);
+  } catch (e) {
+    notify(`${entry.name} — could not toggle mute`, String((e && e.message) || e), true);
+    sendToast('error', `Could not toggle mute for "${entry.name}"`, String((e && e.message) || e));
+  }
+}
+
+async function handlePauseHotkey(id) {
   const apps = store.getApps();
   const entry = apps.find((a) => a.id === id);
   if (!entry) return;
   const sup = audioManager.describeSupport(entry);
-  if (!sup.muteSupported && !sup.pauseSupported) {
-    const reason = sup.muteReason || sup.pauseReason || 'Nothing to toggle.';
-    notify(`${entry.name} — could not toggle`, String(reason), true);
-    sendToast('error', `Could not toggle "${entry.name}"`, String(reason));
+  if (!sup.pauseSupported) {
+    const reason = sup.pauseReason || 'Pause/Resume is not supported for this application.';
+    notify(`${entry.name} — could not pause`, String(reason), true);
+    sendToast('error', `Could not pause "${entry.name}"`, String(reason));
     return;
   }
-  let muteErr = null;
-  let pauseErr = null;
-  // 1. Toggle mute where supported.
-  if (sup.muteSupported) {
-    try {
-      const res = await audio.toggleMuted(entry);
-      entry.muted = !!res.muted;
-      entry.emulated = !!res.emulated;
-    } catch (e) {
-      muteErr = e;
+  try {
+    let paused;
+    if (pausedState.get(id)) {
+      await audio.resume(entry);
+      paused = false;
+    } else {
+      await audio.pause(entry);
+      paused = true;
     }
-  }
-  // 2. Mirror pause state to the (new) mute state where supported, so one
-  // keypress means muted+paused and the next means unmuted+resumed. When
-  // mute isn't supported (e.g. macOS QuickTime) or the mute toggle failed
-  // (e.g. idle app with no audio session yet), fall back to toggling pause
-  // on its own tracked state so the keypress still does something useful.
-  let newPaused = pausedState.get(id) || false;
-  let wantedPause = null; // true = tried to pause, false = tried to resume
-  if (sup.pauseSupported) {
-    if (sup.muteSupported && !muteErr) wantedPause = !!entry.muted;
-    else wantedPause = !newPaused;
-  }
-  if (wantedPause !== null) {
-    try {
-      if (wantedPause) {
-        await audio.pause(entry);
-        newPaused = true;
-      } else {
-        await audio.resume(entry);
-        newPaused = false;
-      }
-      pausedState.set(id, newPaused);
-    } catch (e) {
-      pauseErr = e;
-    }
-  }
-  entry.lastChanged = Date.now();
-  store.setApps(apps);
-  broadcastUpdate();
-  if (!muteErr && !pauseErr) {
-    const parts = [];
-    if (sup.muteSupported) parts.push(entry.muted ? 'Muted' : 'Unmuted');
-    if (wantedPause !== null) parts.push(newPaused ? 'Paused' : 'Resumed');
-    notify(`${entry.name} — ${parts.join(' + ') || 'Toggled'}`);
-  } else {
-    if (muteErr) {
-      notify(`${entry.name} — could not toggle mute`, String((muteErr && muteErr.message) || muteErr), true);
-      sendToast('error', `Could not toggle mute for "${entry.name}"`, String((muteErr && muteErr.message) || muteErr));
-    } else if (sup.muteSupported) {
-      notify(`${entry.name} — ${entry.muted ? 'Muted' : 'Unmuted'}`);
-    }
-    if (pauseErr) {
-      const action = wantedPause ? 'pause' : 'resume';
-      notify(`${entry.name} — could not ${action}`, String((pauseErr && pauseErr.message) || pauseErr), true);
-      sendToast('error', `Could not ${action} "${entry.name}"`, String((pauseErr && pauseErr.message) || pauseErr));
-    } else if (wantedPause !== null && (muteErr || !sup.muteSupported)) {
-      notify(`${entry.name} — ${newPaused ? 'Paused' : 'Resumed'}`);
-    }
+    pausedState.set(id, paused);
+    entry.lastChanged = Date.now();
+    store.setApps(apps);
+    broadcastUpdate();
+    notify(`${entry.name} — ${paused ? 'Paused' : 'Resumed'}`);
+  } catch (e) {
+    notify(`${entry.name} — could not toggle pause`, String((e && e.message) || e), true);
+    sendToast('error', `Could not toggle pause for "${entry.name}"`, String((e && e.message) || e));
   }
 }
 
@@ -501,6 +497,7 @@ function setupIpc() {
         exePath: String((info && info.exePath) || ''),
         pid: (info && info.pid) || 0,
         hotkey: '',
+        pauseHotkey: '',
         muted: false,
         emulated: false,
         running: undefined,
@@ -557,30 +554,41 @@ function setupIpc() {
     }
   });
 
-  ipcMain.handle('appmute:set-hotkey', async (_e, id, accelerator) => {
+  ipcMain.handle('appmute:set-hotkey', async (_e, id, accelerator, kind) => {
     try {
+      const which = kind === 'pause' ? 'pause' : 'mute';
+      const field = hotkeyField(which);
+      const slotLabel = which === 'pause' ? 'pause' : 'mute';
       const acc = String(accelerator || '').trim();
       const apps = store.getApps();
       const entry = apps.find((a) => a.id === id);
       if (!entry) return fail('Application not found. It may have been removed.');
+      if (!(hotkeyField('mute') in entry)) entry.hotkey = '';
+      if (!(hotkeyField('pause') in entry)) entry.pauseHotkey = '';
       if (!acc) {
-        unregisterHotkey(entry);
-        entry.hotkey = '';
+        unregisterHotkeyKind(entry, which);
+        entry[field] = '';
         store.setApps(apps);
         broadcastUpdate();
         return ok(entry);
       }
       const v = hotkeyUtils.validateAccelerator(acc);
       if (!v.ok) return fail(v.reason);
-      const conflict = hotkeyUtils.findConflict(apps, acc, id);
-      if (conflict) return fail(`That hotkey is already assigned to "${conflict.name}". Choose a different combination.`);
-      unregisterHotkey(entry);
-      const previous = entry.hotkey;
-      entry.hotkey = acc;
-      const r = registerHotkey(entry);
+      const conflict = hotkeyUtils.findConflict(apps, acc, id, field);
+      if (conflict) {
+        const usedSlots = [];
+        if ((conflict.hotkey || '').toLowerCase() === acc.toLowerCase()) usedSlots.push('mute');
+        if ((conflict.pauseHotkey || '').toLowerCase() === acc.toLowerCase()) usedSlots.push('pause');
+        const slotText = usedSlots.length === 2 ? 'mute + pause' : usedSlots[0] || slotLabel;
+        return fail(`That hotkey is already assigned as ${slotText} hotkey for "${conflict.name}". Choose a different combination.`);
+      }
+      unregisterHotkeyKind(entry, which);
+      const previous = entry[field];
+      entry[field] = acc;
+      const r = registerHotkeyKind(entry, which);
       if (!r.ok) {
-        entry.hotkey = previous;
-        registerHotkey(entry);
+        entry[field] = previous;
+        registerHotkeyKind(entry, which);
         return fail(r.reason || 'Hotkey could not be registered.');
       }
       store.setApps(apps);
@@ -725,7 +733,7 @@ async function init() {
       sendToast(
         'error',
         'Some hotkeys could not be registered',
-        failures.map((f) => `${f.name}: ${f.reason}`).join('\n')
+        failures.map((f) => `${f.name} (${f.kind} hotkey): ${f.reason}`).join('\n')
       );
     });
   }

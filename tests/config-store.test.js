@@ -40,6 +40,17 @@ test('ConfigStore resetSettings restores defaults but keeps apps', () => {
   assert.equal(store.getApps().length, 1);
 });
 
+test('ConfigStore migrates legacy single-hotkey entries to dual hotkeys', () => {
+  const dir = tempDir();
+  fs.writeFileSync(
+    path.join(dir, 'appmute-config.json'),
+    JSON.stringify({ apps: [{ id: 'a', name: 'Spotify', hotkey: 'Control+Alt+S', muted: true }] })
+  );
+  const store = new ConfigStore(dir);
+  assert.equal(store.getApps()[0].hotkey, 'Control+Alt+S');
+  assert.equal(store.getApps()[0].pauseHotkey, '');
+});
+
 test('ConfigStore tolerates corrupt files', () => {
   const dir = tempDir();
   fs.writeFileSync(path.join(dir, 'appmute-config.json'), '{not json');

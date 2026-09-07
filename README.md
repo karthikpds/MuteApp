@@ -4,7 +4,8 @@ Mute or pause audio from specific apps — a cross-platform desktop utility for
 **Windows and macOS** (per `docs/requirements.md`).
 
 - Pick running apps from a searchable dialog (no manual process names).
-- Assign each app a **global hotkey** (works while AppMute is in the background).
+- Assign each app two **global hotkeys** — one for mute, one for pause
+  (each works while AppMute is in the background).
 - Per-app **mute toggle** that preserves volume and never touches other apps.
 - Pause/Resume where the OS exposes media controls.
 - Dark-theme UI, system tray / menu-bar mode, launch-at-startup, persisted config.
@@ -54,9 +55,11 @@ npm run dist:mac   # DMG (run on macOS)
    parent browser (muting is per-process, not per-tab). On macOS, first use
    asks permission to control each browser — see `docs/LIMITATIONS.md`;
    denying it only hides tab titles.
-2. Click **Set hotkey** on the row, press e.g. `Ctrl + Alt + Y`, **Save**.
-3. Press the hotkey anywhere — the app mutes + pauses together (next press unmutes + resumes), others keep playing. Where pause isn't supported the hotkey just mutes.
-4. `⋮` menu: Mute/Unmute, Set Hotkey, Pause/Resume (if supported), Open, Remove.
+2. Click **Set mute key** on the row (and **Set pause key** where pause is
+   supported), press e.g. `Ctrl + Alt + Y`, **Save**.
+3. Press a hotkey anywhere — mute toggles mute, pause toggles pause/resume;
+   other apps keep playing.
+4. `⋮` menu: Mute/Unmute, Set mute hotkey…, Set pause hotkey… (if supported), Pause/Resume (if supported), Open, Remove.
 5. `⚙ Settings`: startup, start minimized, notifications, tray-on-close, theme, reset.
 
 Config lives in the OS app-data folder as `appmute-config.json`

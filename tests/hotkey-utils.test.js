@@ -52,3 +52,23 @@ test('findConflict detects duplicates case-insensitively, ignoring self', () => 
   assert.equal(findConflict(apps, 'Control+Alt+D'), null);
   assert.equal(findConflict(apps, ''), null);
 });
+
+test('findConflict checks both mute and pause slots', () => {
+  const apps = [
+    { id: 'a', hotkey: 'Control+Alt+Y', pauseHotkey: 'Control+Alt+P' },
+    { id: 'b', hotkey: '', pauseHotkey: 'Control+Alt+O' },
+  ];
+  // Pause slot of another app conflicts.
+  assert.equal(findConflict(apps, 'control+alt+p').id, 'a');
+  assert.equal(findConflict(apps, 'Control+Alt+O').id, 'b');
+  // Same accelerator in the edited slot of the same app is not a conflict…
+  assert.equal(findConflict(apps, 'Control+Alt+Y', 'a', 'hotkey'), null);
+  assert.equal(findConflict(apps, 'Control+Alt+P', 'a', 'pauseHotkey'), null);
+  // …but it still conflicts with the app's own *other* slot…
+  assert.equal(findConflict(apps, 'Control+Alt+P', 'a', 'hotkey').id, 'a');
+  assert.equal(findConflict(apps, 'Control+Alt+Y', 'a', 'pauseHotkey').id, 'a');
+  // …and with no exceptField the whole app is skipped (legacy behavior).
+  assert.equal(findConflict(apps, 'Control+Alt+Y', 'a'), null);
+  // Unset slots never conflict.
+  assert.equal(findConflict([{ id: 'c', hotkey: '', pauseHotkey: '' }], ''), null);
+});

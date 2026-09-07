@@ -105,6 +105,8 @@ html[data-theme="light"] .notice { background: #fef3c7; color: #92400e; }
 .hotkey-chip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 7px; padding: 4px 9px; color: var(--text); cursor: pointer; }
 .hotkey-chip:hover { border-color: var(--accent); }
 .hotkey-chip.unset { color: var(--text-dim); border-style: dashed; }
+.hotkey-chip:disabled { opacity: 0.55; cursor: not-allowed; }
+.hotkey-chip:disabled:hover { border-color: var(--border); }
 
 /* Toggle switch */
 .switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }

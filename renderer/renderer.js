@@ -13,6 +13,7 @@ let state = { apps: [], settings: {}, platform: '', capabilities: {}, autostart:
 let processCache = [];
 let selectedProcess = null;
 let hotkeyTargetId = null;
+let hotkeyTargetKind = 'mute'; // 'mute' -> hotkey, 'pause' -> pauseHotkey
 let capturedAccelerator = '';
 let noticeDismissed = false; // per-session dismissal of the platform notice
 
@@ -117,9 +118,14 @@ function render() {
         <div class="app-proc">${escapeHtml(a.processName || '')}${a.pid ? ` · PID ${a.pid}` : ''}</div>
         <div class="app-sub">
           ${statusPills(a)}
-          <button class="hotkey-chip ${a.hotkey ? '' : 'unset'}" data-action="hotkey" title="Set hotkey (global)">${
-            a.hotkey ? escapeHtml(formatHotkey(a.hotkey)) : 'Set hotkey'
+          <button class="hotkey-chip ${a.hotkey ? '' : 'unset'}" data-action="hotkey-mute" title="Set mute hotkey (global)">${
+            a.hotkey ? escapeHtml(formatHotkey(a.hotkey)) : 'Set mute key'
           }</button>
+          ${pauseSupported
+            ? `<button class="hotkey-chip ${a.pauseHotkey ? '' : 'unset'}" data-action="hotkey-pause" title="Set pause hotkey (global)">${
+              a.pauseHotkey ? escapeHtml(formatHotkey(a.pauseHotkey)) : 'Set pause key'
+            }</button>`
+            : `<button class="hotkey-chip unset" disabled title="${escapeHtml((sup && sup.pauseReason) || 'Pause is not supported for this app.')}">Pause N/A</button>`}
         </div>
       </div>
       <label class="switch" title="${muteSupported ? 'Mute / unmute' : escapeHtml(sup.muteReason || 'Muting not supported')}">
@@ -144,7 +150,11 @@ function render() {
     card.querySelector('[data-action="toggle"]').addEventListener('change', (e) => {
       void setMuted(a.id, e.target.checked);
     });
-    card.querySelector('[data-action="hotkey"]').addEventListener('click', () => openHotkeyDialog(a.id));
+    card.querySelector('[data-action="hotkey-mute"]').addEventListener('click', () => openHotkeyDialog(a.id, 'mute'));
+    const pauseBtn = card.querySelector('[data-action="hotkey-pause"]');
+    if (pauseBtn && !pauseBtn.disabled) {
+      pauseBtn.addEventListener('click', () => openHotkeyDialog(a.id, 'pause'));
+    }
     const kebab = card.querySelector('[data-action="menu"]');
     const menu = card.querySelector('.menu');
     kebab.addEventListener('click', (e) => {
@@ -190,7 +200,11 @@ function buildMenu(menu, a, muteSupported, pauseSupported, sup) {
     muteSupported ? {} : { disabled: true, title: sup.muteReason });
   if (!muteSupported && sup.muteReason) note(sup.muteReason);
 
-  addItem('Set Hotkey…', () => openHotkeyDialog(a.id));
+  addItem('Set mute hotkey…', () => openHotkeyDialog(a.id, 'mute'));
+
+  if (pauseSupported) {
+    addItem('Set pause hotkey…', () => openHotkeyDialog(a.id, 'pause'));
+  }
 
   if (pauseSupported) {
     addItem(a.paused ? 'Resume' : 'Pause', () => togglePause(a));
@@ -358,7 +372,7 @@ async function confirmAdd() {
     return;
   }
   closeAddDialog();
-  toast('info', `Added "${selectedProcess.name}"`, 'Assign it a hotkey to mute it globally.');
+  toast('info', `Added "${selectedProcess.name}"`, 'Assign mute / pause hotkeys to control it globally.');
   await refresh();
 }
 
@@ -385,14 +399,20 @@ function acceleratorFromEvent(e) {
   return [...mods, finalKey].join('+');
 }
 
-function openHotkeyDialog(id) {
+function openHotkeyDialog(id, kind) {
   hotkeyTargetId = id;
+  hotkeyTargetKind = kind === 'pause' ? 'pause' : 'mute';
+  const field = hotkeyTargetKind === 'pause' ? 'pauseHotkey' : 'hotkey';
   capturedAccelerator = '';
   const target = state.apps.find((a) => a.id === id);
-  $('hotkey-app-name').textContent = target ? `Application: ${target.name}` : '';
-  $('hotkey-capture').textContent = target && target.hotkey ? formatHotkey(target.hotkey) : 'Press keys…';
-  $('hotkey-capture').classList.toggle('captured', !!(target && target.hotkey));
-  if (target && target.hotkey) capturedAccelerator = target.hotkey;
+  const current = target ? target[field] : '';
+  $('hotkey-title').textContent = hotkeyTargetKind === 'pause' ? 'Set pause hotkey' : 'Set mute hotkey';
+  $('hotkey-app-name').textContent = target
+    ? `Application: ${target.name} (${hotkeyTargetKind === 'pause' ? 'pause/resume' : 'mute/unmute'})`
+    : '';
+  $('hotkey-capture').textContent = current ? formatHotkey(current) : 'Press keys…';
+  $('hotkey-capture').classList.toggle('captured', !!current);
+  if (current) capturedAccelerator = current;
   $('hotkey-conflict').classList.add('hidden');
   $('hotkey-save').disabled = true;
   $('modal-hotkey').classList.remove('hidden');
@@ -403,6 +423,7 @@ function openHotkeyDialog(id) {
 function closeHotkeyDialog() {
   $('modal-hotkey').classList.add('hidden');
   hotkeyTargetId = null;
+  hotkeyTargetKind = 'mute';
 }
 
 function updateHotkeyDialog() {
@@ -412,9 +433,12 @@ function updateHotkeyDialog() {
     $('hotkey-save').disabled = true;
     return;
   }
-  const dupe = state.apps.find(
-    (a) => a.id !== hotkeyTargetId && (a.hotkey || '').toLowerCase() === capturedAccelerator.toLowerCase()
-  );
+  const want = capturedAccelerator.toLowerCase();
+  const dupe = state.apps.find((a) => {
+    if ((a.hotkey || '').toLowerCase() === want && !(a.id === hotkeyTargetId && hotkeyTargetKind === 'mute')) return true;
+    if ((a.pauseHotkey || '').toLowerCase() === want && !(a.id === hotkeyTargetId && hotkeyTargetKind === 'pause')) return true;
+    return false;
+  });
   if (dupe) {
     conflictBox.textContent = `⚠ Already assigned to "${dupe.name}". Choose a different combination.`;
     conflictBox.classList.remove('hidden');
@@ -427,7 +451,8 @@ function updateHotkeyDialog() {
 
 async function saveHotkey() {
   if (!hotkeyTargetId || !capturedAccelerator) return;
-  const res = await api.setHotkey(hotkeyTargetId, capturedAccelerator);
+  const kindLabel = hotkeyTargetKind === 'pause' ? 'Pause' : 'Mute';
+  const res = await api.setHotkey(hotkeyTargetId, capturedAccelerator, hotkeyTargetKind);
   if (!res.ok) {
     const box = $('hotkey-conflict');
     box.textContent = res.error;
@@ -435,7 +460,7 @@ async function saveHotkey() {
     return;
   }
   closeHotkeyDialog();
-  toast('info', 'Hotkey saved', formatHotkey(capturedAccelerator));
+  toast('info', `${kindLabel} hotkey saved`, formatHotkey(capturedAccelerator));
   await refresh();
 }
 
@@ -516,7 +541,7 @@ function bindEvents() {
   $('hotkey-save').addEventListener('click', () => void saveHotkey());
   $('hotkey-clear').addEventListener('click', async () => {
     if (!hotkeyTargetId) return;
-    const res = await api.setHotkey(hotkeyTargetId, '');
+    const res = await api.setHotkey(hotkeyTargetId, '', hotkeyTargetKind);
     if (!res.ok) {
       toast('error', 'Could not remove hotkey', res.error);
       return;

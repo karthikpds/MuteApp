@@ -55,12 +55,12 @@ const SAMPLE_STATE = {
   apps: [
     {
       id: 'a1', name: 'Spotify', processName: 'Spotify', exePath: '', pid: 111,
-      hotkey: 'Control+Alt+S', muted: true, emulated: true, paused: false, running: true,
+      hotkey: 'Control+Alt+S', pauseHotkey: 'Control+Alt+P', muted: true, emulated: true, paused: false, running: true,
       support: { muteSupported: true, muteEmulated: true, pauseSupported: true, muteReason: '', pauseReason: '' },
     },
     {
       id: 'a2', name: 'Google Chrome', processName: 'Google Chrome', exePath: '', pid: 222,
-      hotkey: '', muted: false, emulated: false, paused: false, running: false,
+      hotkey: '', pauseHotkey: '', muted: false, emulated: false, paused: false, running: false,
       support: {
         muteSupported: false, muteEmulated: false, pauseSupported: false,
         muteReason: 'macOS does not provide a per-application mute API.',
@@ -173,9 +173,11 @@ test('renderer renders header, cards and status bar from live state', async () =
   assert.match(spotify, /Spotify/);
   assert.match(spotify, /Muted/);
   assert.match(spotify, /⌃ \+ ⌥ \+ S/); // Control+Alt+S shown with macOS symbols
+  assert.match(spotify, /⌃ \+ ⌥ \+ P/); // pause hotkey chip alongside the mute one
   assert.match(chrome, /Google Chrome/);
   assert.match(chrome, /Not running/);
-  assert.match(chrome, /Set hotkey/);
+  assert.match(chrome, /Set mute key/);
+  assert.match(chrome, /Pause N\/A/); // pause unsupported: disabled chip, not a setter
 
   assert.match(elements.get('statusbar-text').textContent, /2 apps · 1 muted/);
   assert.equal(elements.get('empty-state').classList.contains('hidden'), true);

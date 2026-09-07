@@ -78,6 +78,8 @@ stale PID.
 
 Registered with Electron `globalShortcut`, which cannot override OS-reserved
 combinations. If registration fails, the Save is rolled back and the error is
-shown. Hotkeys require at least one modifier plus a key. Modifiers are stored
+shown. Each hotkey requires at least one modifier plus a key; each app has
+separate mute and pause slots and a combination may only occupy one slot
+anywhere (including the same app's other slot). Modifiers are stored
 literally (`Control`/`Alt`/`Shift`/`Super`), where `Super` means Command on
 macOS and the Windows key on Windows — display names adapt per platform.

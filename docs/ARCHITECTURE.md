@@ -33,8 +33,8 @@ resources/         — tray.png / tray@2x.png / app-icon.png + generate-icons.py
 
 ## Key flows
 
-- **Toggle via hotkey:** `globalShortcut` → `handleHotkeyToggle(id)` → `audio.toggleMuted(entry)` + mirror pause/resume to the new mute state (`audio.pause` when muted, `audio.resume` when unmuted; pause-only toggle where mute is unsupported) → persist → `apps-updated` event → tray refresh + OS notification ("Muted + Paused" / "Unmuted + Resumed"). Mute and pause failures are reported independently so one can succeed while the other errors.
-- **Set hotkey:** renderer captures combo → main validates → conflict-check against stored apps → `unregister(old)` + `register(new)` → persist only if the OS accepted it.
+- **Toggles via hotkeys:** `globalShortcut` → `handleMuteHotkey(id)` → `audio.toggleMuted(entry)` (mute chip / mute hotkey), and separately → `handlePauseHotkey(id)` → `audio.pause`/`resume` driven by tracked pause state (pause chip / pause hotkey) → persist → `apps-updated` event → tray refresh + OS notification. Each app stores `hotkey` (mute) + `pauseHotkey` (pause); either slot may be unset.
+- **Set hotkey:** renderer captures combo per slot (mute/pause) → main validates → conflict-check against *both* slots of every app (an app's own other slot included) → `unregister`/`register` that slot only → persist only if the OS accepted it.
 - **Status refresh:** main re-queries WASAPI sessions (Windows) or AppleScript volume (macOS) on `get-state` and every 15 s, so closed/reopened apps show *Not running* then recover automatically.
 - **Add dialog enrichment:** `list-processes` merges browser tab titles (macOS AppleScript, best-effort with denial-as-data) or top-level window titles (Windows `AudioController windows`); Helper/Renderer sub-process rows are hidden and Windows rows are grouped per process name since `--process` mute covers all of a name's sessions.
 - **Close button:** hidden to tray when `minimizeToTrayOnClose` is set; `Quit AppMute` in the tray menu exits fully.
