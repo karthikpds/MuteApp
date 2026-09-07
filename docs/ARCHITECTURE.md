@@ -43,18 +43,22 @@ resources/         — tray.png / tray@2x.png / app-icon.png + generate-icons.py
 
 ## Verification performed
 
-- `npm test` — 26 tests: hotkey normalize/validate/format/conflicts, config
-  persistence/corruption/reset, platform/audio capability matrix, tasklist
-  parsing, picker ordering, AppleScript tab-output parsing, Automation-denial
-  handling, Helper-noise filtering, Windows process grouping, window-title
-  merge, picker subtitle/search, renderer DOM smoke (real `renderer.js`
-  against a stub DOM), element-id cross-check between renderer and HTML.
+- `npm test` — 28 tests: hotkey normalize/validate/format/dual-slot conflicts,
+  config persistence/corruption/reset/legacy-hotkey migration, platform/audio
+  capability matrix, tasklist parsing, picker ordering, AppleScript tab-output
+  parsing, Automation-denial handling, Helper-noise filtering, Windows process
+  grouping, window-title merge, picker subtitle/search, renderer DOM smoke
+  (real `renderer.js` against a stub DOM, incl. dual hotkey chips), element-id
+  cross-check between renderer and HTML.
 - Live runs (`npm start`) on macOS, inspected over the DevTools protocol:
   main-window render, Add dialog against a real running Chrome (tab
   subtitles + title search, screenshot-verified), IPC error shapes,
   single-instance lock behavior.
 - `npx electron --version` + smoke load of all `lib/` modules without Electron.
-- Windows native code (`AudioController.cpp`, incl. the `windows` command and
-  process-wide mute) verified by careful review only — it needs MSVC and must
-  still be compiled and exercised on a Windows machine
-  (`AudioController.exe list/windows/toggle --process chrome.exe`).
+- Windows native code (`AudioController.cpp`: WASAPI mute, `windows` command,
+  process-wide mute, targeted `WM_APPCOMMAND` pause/resume with hung-safe
+  broadcast fallback) is compiled with MSVC on every push by
+  `.github/workflows/build-win.yml` (which also smoke-tests the helper binary
+  and runs the full `npm test` suite on Windows), and pause/resume plus both
+  hotkeys have been exercised against live apps on a Windows machine
+  (`AudioController.exe pause|resume --process chrome.exe`).

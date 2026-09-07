@@ -7,13 +7,13 @@ is a dependency-free C++ CLI (Windows SDK only) that the Electron layer calls:
 ```
 AudioController.exe list
 AudioController.exe windows
-AudioController.exe mute   --pid 1234
-AudioController.exe unmute --process chrome.exe
-AudioController.exe toggle --pid 1234
-AudioController.exe status --pid 1234
-AudioController.exe pause
-AudioController.exe resume
-AudioController.exe playpause
+AudioController.exe mute     --pid 1234
+AudioController.exe unmute   --process chrome.exe
+AudioController.exe toggle   --pid 1234
+AudioController.exe status   --pid 1234
+AudioController.exe pause    --process chrome.exe
+AudioController.exe resume   --process chrome.exe
+AudioController.exe playpause --process chrome.exe
 ```
 
 Every command prints one JSON object (`{"ok":true,...}`).

@@ -17,8 +17,9 @@ Mute or pause audio from specific apps — a cross-platform desktop utility for
 
 ```bash
 npm install
-npm test        # 26 tests: hotkeys, store, platform/audio matrix, browser tabs,
-                # picker grouping/subtitles/search, renderer smoke
+npm test        # 28 tests: hotkeys (incl. dual mute/pause slots), store
+                # (incl. legacy single-hotkey migration), platform/audio matrix,
+                # browser tabs, picker grouping/subtitles/search, renderer smoke
 npm start       # run the app in development
 ```
 
@@ -56,7 +57,10 @@ npm run dist:mac   # DMG (run on macOS)
    asks permission to control each browser — see `docs/LIMITATIONS.md`;
    denying it only hides tab titles.
 2. Click **Set mute key** on the row (and **Set pause key** where pause is
-   supported), press e.g. `Ctrl + Alt + Y`, **Save**.
+   supported — otherwise the chip reads `Pause N/A`), press e.g.
+   `Ctrl + Alt + Y` for mute and `Ctrl + Alt + U` for pause, **Save**. A
+   combination may only occupy one slot anywhere, so the dialog warns if it
+   clashes with any mute or pause key, including the app's own other slot.
 3. Press a hotkey anywhere — mute toggles mute, pause toggles pause/resume;
    other apps keep playing.
 4. `⋮` menu: Mute/Unmute, Set mute hotkey…, Set pause hotkey… (if supported), Pause/Resume (if supported), Open, Remove.
@@ -75,8 +79,9 @@ the picker are never written to this file — they stay in memory only.
   saved state (`rm -rf ~/Library/Application\ Support/appmute` on macOS),
   and relaunch. Load failures and renderer crashes now surface error dialogs
   instead of a silent blank screen.
-- **Hotkey won't save** — the combination is likely OS-reserved; the dialog
-  shows the exact reason. Pick another combination.
+- **Hotkey won't save** — the combination is likely OS-reserved or already
+  used as another mute/pause key; the dialog shows the exact reason. Pick
+  another combination.
 - **No tab titles on macOS** — allow control in System Settings → Privacy &
   Security → Automation. Denying only hides tab titles.
 - **Mute fails on Windows** — build `AudioController.exe` first (see above);

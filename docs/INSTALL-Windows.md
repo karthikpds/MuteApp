@@ -63,7 +63,8 @@ it as a GitHub Release.
 ## After installing
 
 - Click **+ Add App**, pick e.g. Chrome or Spotify, assign mute / pause hotkeys
-  (e.g. `Ctrl + Alt + Y`), then press it while another window is focused.
+  (e.g. `Ctrl + Alt + Y` for mute, `Ctrl + Alt + U` for pause), then press
+  them while another window is focused.
 - Settings (⚙) cover launch-at-startup, tray behavior, and theme.
 - Your config lives in `%APPDATA%\appmute\appmute-config.json`.
 

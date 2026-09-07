@@ -4,13 +4,14 @@ Build a cross-platform desktop application called **AppMute** that runs on **Win
 
 AppMute allows the user to select individual applications and control their audio independently from other applications.
 
-For each added application, the user should be able to assign a **global keyboard hotkey** that toggles that application's audio between muted and unmuted.
+For each added application, the user should be able to assign two **global keyboard hotkeys**: one that toggles that application's audio between muted and unmuted, and one that toggles pause/resume (where the platform exposes media controls).
 
 For example:
 
 * Chrome playing YouTube → press `Ctrl + Alt + Y` → Chrome audio is muted
 * Press `Ctrl + Alt + Y` again → Chrome audio is restored
-* Spotify → press its assigned hotkey → Spotify audio is muted
+* Press `Ctrl + Alt + U` → YouTube pauses; press again → it resumes
+* Spotify → press its assigned mute hotkey → Spotify audio is muted
 * Other applications should continue playing normally
 
 The app should work with common audio-producing applications such as:
@@ -58,7 +59,7 @@ Each application should appear as a row/card containing:
 * Application name
 * Application/process name if useful
 * Current audio status
-* Assigned hotkey
+* Assigned mute hotkey and pause hotkey
 * Quick mute/unmute toggle
 * Three-dot `⋮` menu
 
@@ -69,7 +70,8 @@ Example:
 
 Status: `Muted`
 
-Hotkey: `Ctrl + Alt + Y`
+Mute hotkey: `Ctrl + Alt + Y`
+Pause hotkey: `Ctrl + Alt + U`
 
 Toggle: ON
 
@@ -81,7 +83,8 @@ Another example:
 
 Status: `Unmuted`
 
-Hotkey: `Ctrl + Alt + S`
+Mute hotkey: `Ctrl + Alt + S`
+Pause hotkey: `Ctrl + Alt + P`
 
 Toggle: OFF
 
@@ -108,7 +111,8 @@ After adding an application, it should immediately appear in the main applicatio
 Right-clicking an application, or clicking its `⋮` menu, should display options such as:
 
 * Mute / Unmute
-* Set Hotkey
+* Set mute hotkey
+* Set pause hotkey (only if supported)
 * Pause / Resume (only if supported)
 * Open Application
 * Remove
@@ -117,23 +121,25 @@ The exact available options should depend on what the operating system and appli
 
 ## Hotkey system
 
-Each application can have its own global hotkey.
+Each application can have two global hotkeys of its own: a mute hotkey and
+a pause hotkey. Either slot may be left unset.
 
-The hotkey must work even when AppMute is not the currently focused window.
+Both hotkeys must work even when AppMute is not the currently focused window.
 
 For example:
 
-* YouTube → `Ctrl + Alt + Y`
-* Spotify → `Ctrl + Alt + S`
-* Discord → `Ctrl + Alt + D`
+* YouTube mute → `Ctrl + Alt + Y`, YouTube pause → `Ctrl + Alt + U`
+* Spotify mute → `Ctrl + Alt + S`, Spotify pause → `Ctrl + Alt + P`
+* Discord mute → `Ctrl + Alt + D`
 
-When the user chooses `Set Hotkey`:
+When the user chooses `Set mute hotkey` or `Set pause hotkey`:
 
 1. Open a small dialog.
 2. Tell the user to press the desired key combination.
 3. Detect the key combination.
 4. Display the detected combination.
-5. Check whether the hotkey is already assigned to another application.
+5. Check whether the hotkey is already assigned — as any application's mute
+   or pause hotkey, including the same application's other slot.
 6. Warn the user if there is a conflict.
 7. Allow the user to save or cancel.
 
@@ -150,7 +156,7 @@ Use the appropriate names/symbols for each platform.
 
 ## Mute behavior
 
-Pressing an application's assigned hotkey should toggle its audio state.
+Pressing an application's assigned mute hotkey should toggle its audio state.
 
 Example:
 
@@ -173,11 +179,11 @@ If technically possible, support pausing media in applications that expose media
 
 For applications that support media pausing:
 
-`Pause → Resume`
+`Pause → Resume` (via the assigned pause hotkey or the menu)
 
 For applications that do not support it:
 
-* Disable the pause option
+* Disable the pause option and the pause hotkey slot
 * Explain that the application does not expose compatible media controls
 
 Do not pretend to pause an application if the operating system/API cannot actually do so.
@@ -193,13 +199,15 @@ Use clear visual states such as:
 * ▶ Playing
 * ⏸ Paused
 
-When a hotkey is pressed, optionally show a small non-intrusive notification:
+When a mute hotkey is pressed, optionally show a small non-intrusive notification:
 
 `YouTube — Muted`
 
 or
 
 `Spotify — Unmuted`
+
+and likewise `YouTube — Paused` / `YouTube — Resumed` for the pause hotkey.
 
 The notification should disappear automatically.
 
