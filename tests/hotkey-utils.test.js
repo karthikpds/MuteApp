@@ -42,32 +42,37 @@ test('formatForDisplay uses platform-appropriate names', () => {
   assert.equal(formatForDisplay('', 'win32'), 'Not set');
 });
 
-test('findConflict detects duplicates case-insensitively, ignoring self', () => {
+test('findConflict allows duplicates across apps, only same-app other slot conflicts', () => {
   const apps = [
     { id: 'a', hotkey: 'Control+Alt+Y' },
     { id: 'b', hotkey: 'Control+Alt+S' },
   ];
-  assert.equal(findConflict(apps, 'control+alt+y').id, 'a');
-  assert.equal(findConflict(apps, 'Control+Alt+Y', 'a'), null);
-  assert.equal(findConflict(apps, 'Control+Alt+D'), null);
+  // Different apps may share: no conflict, even without an exceptId.
+  assert.equal(findConflict(apps, 'control+alt+y'), null);
+  assert.equal(findConflict(apps, 'Control+Alt+Y', 'b', 'hotkey'), null);
+  assert.equal(findConflict(apps, 'Control+Alt+S', 'a', 'hotkey'), null);
+  // Re-saving the same value in the same slot is not a conflict.
+  assert.equal(findConflict(apps, 'Control+Alt+Y', 'a', 'hotkey'), null);
+  assert.equal(findConflict(apps, 'Control+Alt+D', 'a', 'hotkey'), null);
   assert.equal(findConflict(apps, ''), null);
 });
 
-test('findConflict checks both mute and pause slots', () => {
+test('findConflict checks only the same app other slot', () => {
   const apps = [
     { id: 'a', hotkey: 'Control+Alt+Y', pauseHotkey: 'Control+Alt+P' },
     { id: 'b', hotkey: '', pauseHotkey: 'Control+Alt+O' },
   ];
-  // Pause slot of another app conflicts.
-  assert.equal(findConflict(apps, 'control+alt+p').id, 'a');
-  assert.equal(findConflict(apps, 'Control+Alt+O').id, 'b');
+  // Another app using it is fine.
+  assert.equal(findConflict(apps, 'control+alt+p', 'b', 'hotkey'), null);
+  assert.equal(findConflict(apps, 'Control+Alt+O', 'a', 'hotkey'), null);
+  assert.equal(findConflict(apps, 'control+alt+p'), null);
   // Same accelerator in the edited slot of the same app is not a conflict…
   assert.equal(findConflict(apps, 'Control+Alt+Y', 'a', 'hotkey'), null);
   assert.equal(findConflict(apps, 'Control+Alt+P', 'a', 'pauseHotkey'), null);
   // …but it still conflicts with the app's own *other* slot…
   assert.equal(findConflict(apps, 'Control+Alt+P', 'a', 'hotkey').id, 'a');
   assert.equal(findConflict(apps, 'Control+Alt+Y', 'a', 'pauseHotkey').id, 'a');
-  // …and with no exceptField the whole app is skipped (legacy behavior).
+  // …and with no exceptField there is no self slot to compare (allow).
   assert.equal(findConflict(apps, 'Control+Alt+Y', 'a'), null);
   // Unset slots never conflict.
   assert.equal(findConflict([{ id: 'c', hotkey: '', pauseHotkey: '' }], ''), null);

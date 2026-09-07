@@ -402,9 +402,9 @@ function acceleratorFromEvent(e) {
 function openHotkeyDialog(id, kind) {
   hotkeyTargetId = id;
   hotkeyTargetKind = kind === 'pause' ? 'pause' : 'mute';
-  // Suspend global hotkey handlers while capturing so pressing an
-  // already-assigned combo shows the conflict warning instead of
-  // toggling the other app.
+  // Suspend global hotkey handlers while capturing so pressing a combination
+  // (including one already shared by other apps) is recorded in the field
+  // instead of toggling those apps.
   try {
     const p = api.setHotkeyCapture && api.setHotkeyCapture(true);
     if (p && typeof p.catch === 'function') p.catch(() => {});
@@ -450,14 +450,16 @@ function updateHotkeyDialog() {
     $('hotkey-save').disabled = true;
     return;
   }
+  // Duplicates across DIFFERENT apps are allowed (one global registration
+  // fans out to all of them). Only block the SAME app reusing one combination
+  // for both its mute and pause slots.
   const want = capturedAccelerator.toLowerCase();
-  const dupe = state.apps.find((a) => {
-    if ((a.hotkey || '').toLowerCase() === want && !(a.id === hotkeyTargetId && hotkeyTargetKind === 'mute')) return true;
-    if ((a.pauseHotkey || '').toLowerCase() === want && !(a.id === hotkeyTargetId && hotkeyTargetKind === 'pause')) return true;
-    return false;
-  });
+  const self = state.apps.find((a) => a.id === hotkeyTargetId);
+  const otherSlot = hotkeyTargetKind === 'pause' ? 'hotkey' : 'pauseHotkey';
+  const otherLabel = hotkeyTargetKind === 'pause' ? 'mute' : 'pause';
+  const dupe = self && ((self[otherSlot] || '').toLowerCase() === want);
   if (dupe) {
-    conflictBox.textContent = `⚠ Already assigned to "${dupe.name}". Choose a different combination.`;
+    conflictBox.textContent = `⚠ Already used as the ${otherLabel} hotkey for "${self.name}". Use a different combination for this slot.`;
     conflictBox.classList.remove('hidden');
     $('hotkey-save').disabled = true;
   } else {

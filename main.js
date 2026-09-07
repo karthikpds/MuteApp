@@ -151,51 +151,147 @@ function hotkeyField(kind) {
   return kind === 'pause' ? 'pauseHotkey' : 'hotkey';
 }
 
-function unregisterHotkeyKind(appEntry, kind) {
+// Multiple apps may share the same accelerator. We keep exactly one global
+// registration per unique combination (case-insensitive) and fan out to
+// every app/slot using it. Map: normalized accelerator -> canonical string
+// as registered with Electron.
+const registeredAccelerators = new Map();
+
+function acceleratorKey(acc) {
+  return String(acc || '').toLowerCase();
+}
+
+function collectUniqueAccelerators(apps) {
+  const uniq = new Map();
+  for (const a of apps || []) {
+    for (const field of ['hotkey', 'pauseHotkey']) {
+      const acc = a && a[field];
+      if (!acc) continue;
+      const key = acceleratorKey(acc);
+      if (key && !uniq.has(key)) uniq.set(key, acc);
+    }
+  }
+  return uniq;
+}
+
+function isAcceleratorUsedByApps(apps, acc) {
+  if (!acc) return false;
+  const want = acceleratorKey(acc);
+  return (apps || []).some(
+    (a) =>
+      (a.hotkey || '').toLowerCase() === want ||
+      (a.pauseHotkey || '').toLowerCase() === want
+  );
+}
+
+/** Fan-out handler: one physical hotkey press acts on ALL apps sharing it. */
+async function handleSharedHotkey(canonicalAcc) {
+  if (isCapturingHotkey()) return;
+  const want = acceleratorKey(canonicalAcc);
+  let apps = [];
   try {
-    const acc = appEntry[hotkeyField(kind)];
-    if (acc) globalShortcut.unregister(acc);
+    apps = store.getApps();
   } catch {
-    /* ignore */
+    return;
+  }
+  const targets = (apps || []).filter(
+    (a) =>
+      (a.hotkey || '').toLowerCase() === want ||
+      (a.pauseHotkey || '').toLowerCase() === want
+  );
+  for (const t of targets) {
+    try {
+      if ((t.hotkey || '').toLowerCase() === want) {
+        await handleMuteHotkey(t.id);
+      }
+    } catch {
+      /* per-app errors already surface via notify/toast */
+    }
+    try {
+      if ((t.pauseHotkey || '').toLowerCase() === want) {
+        await handlePauseHotkey(t.id);
+      }
+    } catch {
+      /* per-app errors already surface via notify/toast */
+    }
   }
 }
 
-function unregisterHotkey(appEntry) {
-  unregisterHotkeyKind(appEntry, 'mute');
-  unregisterHotkeyKind(appEntry, 'pause');
-}
-
-function registerHotkeyKind(appEntry, kind) {
-  const acc = appEntry[hotkeyField(kind)];
+function registerSharedAccelerator(acc) {
   if (!acc) return { ok: true };
   const v = hotkeyUtils.validateAccelerator(acc);
   if (!v.ok) return { ok: false, reason: v.reason };
-  const handler =
-    kind === 'pause'
-      ? () => {
-          void handlePauseHotkey(appEntry.id);
-        }
-      : () => {
-          void handleMuteHotkey(appEntry.id);
-        };
+  const key = acceleratorKey(acc);
+  if (registeredAccelerators.has(key)) return { ok: true };
   try {
-    const registered = globalShortcut.register(acc, handler);
+    if (
+      typeof globalShortcut.isRegistered === 'function' &&
+      globalShortcut.isRegistered(acc)
+    ) {
+      return { ok: false, reason: 'Hotkey is already taken (by the OS or another program) and could not be registered.' };
+    }
+    const registered = globalShortcut.register(acc, () => {
+      void handleSharedHotkey(acc);
+    });
     if (!registered) {
       return { ok: false, reason: 'Hotkey is already taken (by the OS or another program) and could not be registered.' };
     }
+    registeredAccelerators.set(key, acc);
     return { ok: true };
   } catch (e) {
     return { ok: false, reason: String((e && e.message) || e) };
   }
 }
 
+function unregisterAcceleratorIfUnused(acc, apps) {
+  if (!acc) return;
+  if (isAcceleratorUsedByApps(apps, acc)) return; // still shared
+  const key = acceleratorKey(acc);
+  const canonical = registeredAccelerators.get(key) || acc;
+  try {
+    globalShortcut.unregister(canonical);
+  } catch {
+    /* ignore */
+  }
+  if (String(canonical).toLowerCase() !== String(acc).toLowerCase()) {
+    try {
+      globalShortcut.unregister(acc);
+    } catch {
+      /* ignore */
+    }
+  }
+  registeredAccelerators.delete(key);
+}
+
 function registerAllHotkeys() {
+  registeredAccelerators.clear();
+  try {
+    globalShortcut.unregisterAll();
+  } catch {
+    /* ignore */
+  }
   const failures = [];
-  for (const a of store.getApps()) {
-    for (const kind of ['mute', 'pause']) {
-      if (!a[hotkeyField(kind)]) continue;
-      const r = registerHotkeyKind(a, kind);
-      if (!r.ok) failures.push({ name: a.name, kind, reason: r.reason });
+  const apps = store.getApps();
+  const uniq = collectUniqueAccelerators(apps);
+  for (const [, canonical] of uniq) {
+    const r = registerSharedAccelerator(canonical);
+    if (!r.ok) {
+      const want = acceleratorKey(canonical);
+      const affected = apps.filter(
+        (a) =>
+          (a.hotkey || '').toLowerCase() === want ||
+          (a.pauseHotkey || '').toLowerCase() === want
+      );
+      if (affected.length === 0) {
+        failures.push({ name: canonical, kind: 'mute/pause', reason: r.reason });
+      } else {
+        for (const a of affected) {
+          const slots = [];
+          if ((a.hotkey || '').toLowerCase() === want) slots.push('mute');
+          if ((a.pauseHotkey || '').toLowerCase() === want) slots.push('pause');
+          failures.push({ name: a.name, kind: slots.join('+') || 'mute/pause', reason: r.reason });
+        }
+      }
     }
   }
   return failures;
@@ -533,8 +629,12 @@ function setupIpc() {
     try {
       const apps = store.getApps();
       const entry = apps.find((a) => a.id === id);
-      if (entry) unregisterHotkey(entry);
-      store.setApps(apps.filter((a) => a.id !== id));
+      const remaining = apps.filter((a) => a.id !== id);
+      store.setApps(remaining);
+      if (entry) {
+        if (entry.hotkey) unregisterAcceleratorIfUnused(entry.hotkey, remaining);
+        if (entry.pauseHotkey) unregisterAcceleratorIfUnused(entry.pauseHotkey, remaining);
+      }
       pausedState.delete(id);
       broadcastUpdate();
       return ok({ removed: id });
@@ -585,7 +685,6 @@ function setupIpc() {
     try {
       const which = kind === 'pause' ? 'pause' : 'mute';
       const field = hotkeyField(which);
-      const slotLabel = which === 'pause' ? 'pause' : 'mute';
       const acc = String(accelerator || '').trim();
       const apps = store.getApps();
       const entry = apps.find((a) => a.id === id);
@@ -593,32 +692,40 @@ function setupIpc() {
       if (!(hotkeyField('mute') in entry)) entry.hotkey = '';
       if (!(hotkeyField('pause') in entry)) entry.pauseHotkey = '';
       if (!acc) {
-        unregisterHotkeyKind(entry, which);
+        const previous = entry[field];
         entry[field] = '';
         store.setApps(apps);
+        unregisterAcceleratorIfUnused(previous, apps);
         broadcastUpdate();
         return ok(entry);
       }
       const v = hotkeyUtils.validateAccelerator(acc);
       if (!v.ok) return fail(v.reason);
+      // Duplicate check is SAME-APP ONLY: different apps may share one
+      // combination (one global registration fans out to all of them).
       const conflict = hotkeyUtils.findConflict(apps, acc, id, field);
       if (conflict) {
-        const usedSlots = [];
-        if ((conflict.hotkey || '').toLowerCase() === acc.toLowerCase()) usedSlots.push('mute');
-        if ((conflict.pauseHotkey || '').toLowerCase() === acc.toLowerCase()) usedSlots.push('pause');
-        const slotText = usedSlots.length === 2 ? 'mute + pause' : usedSlots[0] || slotLabel;
-        return fail(`That hotkey is already assigned as ${slotText} hotkey for "${conflict.name}". Choose a different combination.`);
+        const otherSlot = field === 'hotkey' ? 'pause' : 'mute';
+        return fail(`That hotkey is already used as the ${otherSlot} hotkey for "${conflict.name}". Use a different combination for this slot.`);
       }
-      unregisterHotkeyKind(entry, which);
-      const previous = entry[field];
+      const previous = entry[field] || '';
+      if (previous.toLowerCase() === acc.toLowerCase()) {
+        // Re-saving the same value (e.g. casing change): ensure registration.
+        entry[field] = acc;
+        store.setApps(apps);
+        const rSame = registerSharedAccelerator(acc);
+        if (!rSame.ok) return fail(rSame.reason || 'Hotkey could not be registered.');
+        broadcastUpdate();
+        return ok(entry);
+      }
+      // Ensure the new combination is registrable before dropping the old one.
+      const rNew = registerSharedAccelerator(acc);
+      if (!rNew.ok) {
+        return fail(rNew.reason || 'Hotkey could not be registered.');
+      }
       entry[field] = acc;
-      const r = registerHotkeyKind(entry, which);
-      if (!r.ok) {
-        entry[field] = previous;
-        registerHotkeyKind(entry, which);
-        return fail(r.reason || 'Hotkey could not be registered.');
-      }
       store.setApps(apps);
+      if (previous) unregisterAcceleratorIfUnused(previous, apps);
       broadcastUpdate();
       return ok(entry);
     } catch (e) {
