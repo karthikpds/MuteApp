@@ -78,18 +78,17 @@ const $ = (id) => document.getElementById(id);
 
 function formatHotkey(acc) {
   if (!acc) return 'Not set';
-  const isMac = state.platform === 'macos';
   return acc
     .split('+')
     .map((s) => s.trim())
     .filter(Boolean)
     .map((tok) => {
       const l = tok.toLowerCase();
-      if (l === 'commandorcontrol') return isMac ? '⌘' : 'Ctrl';
-      if (l === 'ctrl' || l === 'control') return isMac ? '⌃' : 'Ctrl';
-      if (l === 'alt' || l === 'option') return isMac ? '⌥' : 'Alt';
-      if (l === 'shift') return isMac ? '⇧' : 'Shift';
-      if (l === 'super' || l === 'meta' || l === 'cmd' || l === 'command') return isMac ? '⌘' : 'Win';
+      if (l === 'commandorcontrol') return 'Ctrl';
+      if (l === 'ctrl' || l === 'control') return 'Ctrl';
+      if (l === 'alt' || l === 'option') return 'Alt';
+      if (l === 'shift') return 'Shift';
+      if (l === 'super' || l === 'meta' || l === 'cmd' || l === 'command') return 'Win';
       return tok.length === 1 ? tok.toUpperCase() : tok;
     })
     .join(' + ');
@@ -102,15 +101,9 @@ function statusPills(a) {
   } else if (a.paused) {
     pills.push('<span class="pill paused">⏸ Paused</span>');
   } else if (a.muted) {
-    pills.push(`<span class="pill muted">🔇 Muted${a.emulated ? ' (emulated)' : ''}</span>`);
+    pills.push('<span class="pill muted">🔇 Muted</span>');
   } else {
     pills.push('<span class="pill unmuted">🔊 Unmuted</span>');
-  }
-  const sup = a.support || {};
-  if (state.capabilities && state.capabilities.perAppMute === false && sup.muteSupported === false) {
-    pills.push('<span class="pill">Limited on macOS</span>');
-  } else if (sup.muteEmulated) {
-    pills.push('<span class="pill emulated">App volume</span>');
   }
   return pills.join('');
 }
@@ -127,25 +120,13 @@ function render() {
   document.documentElement.dataset.theme = (state.settings && state.settings.theme) || 'dark';
 
   const badge = $('platform-badge');
-  if (state.capabilities && state.capabilities.perAppMute) {
-    badge.textContent = state.platform === 'windows' ? 'Windows · true per-app mute' : 'Full per-app mute';
-    badge.className = 'platform-badge full';
-    badge.title = state.capabilities.notes || '';
-  } else {
-    badge.textContent = state.platform === 'macos' ? 'macOS · limited' : 'Limited support';
-    badge.className = 'platform-badge limited';
-    badge.title = (state.capabilities && state.capabilities.notes) || '';
-  }
+  badge.textContent = 'Windows · true per-app mute';
+  badge.className = 'platform-badge full';
+  badge.title = (state.capabilities && state.capabilities.notes) || '';
 
   const notice = $('platform-notice');
   const noticeText = $('platform-notice-text');
-  if (!noticeDismissed && state.platform === 'macos') {
-    notice.classList.remove('hidden');
-    noticeText.innerHTML =
-      '<strong>macOS limitation:</strong> macOS provides no system API for muting a single app. ' +
-      'AppMute can control in-app volume for scriptable apps (e.g. Spotify) and pause/resume media apps. ' +
-      'Browsers, Discord and similar apps are marked <em>Limited</em> — mute inside the app or use a virtual-audio driver.';
-  } else if (!noticeDismissed && state.platform === 'windows' && window.__audioHelperMissing) {
+  if (!noticeDismissed && window.__audioHelperMissing) {
     notice.classList.remove('hidden');
     noticeText.textContent =
       'Windows audio helper (AudioController.exe) is missing — build native/windows first. See native/windows/README.md.';
@@ -285,9 +266,6 @@ async function refresh() {
       return;
     }
     state = { ...state, ...res.data };
-    if (res.data.capabilities && res.data.capabilities.perAppMute === false && state.platform === 'windows') {
-      // Windows without helper still reports capability true; detect via error text instead.
-    }
     render();
   } catch (e) {
     toast('error', 'Could not load state', String((e && e.message) || e));
@@ -341,15 +319,9 @@ function openAddDialog() {
       $('add-list').innerHTML = `<p class="muted">Could not list applications: ${escapeHtml(res.error)}</p>`;
       return;
     }
-    // Main returns { apps, tabDenials } (array form tolerated for safety).
+    // Main returns { apps } (array form tolerated for safety).
     const payload = res.data || {};
     processCache = Array.isArray(payload) ? payload : payload.apps || [];
-    const denials = Array.isArray(payload) ? [] : payload.tabDenials || [];
-    if (denials.length > 0) {
-      const hint = $('add-hint');
-      hint.textContent = denials[0]; // how to enable tab titles; shown once, inline
-      hint.classList.remove('hidden');
-    }
     renderProcessList('');
   }).catch((e) => {
     $('add-list').innerHTML = `<p class="muted">Could not list applications: ${escapeHtml(String((e && e.message) || e))}</p>`;
@@ -361,24 +333,19 @@ function closeAddDialog() {
   $('modal-add').classList.add('hidden');
 }
 
-/** Search matches names, tab titles/URLs, and window titles — not just processes. */
+/** Search matches names and window titles — not just processes. */
 function processMatches(p, q) {
   if (!q) return true;
   if ((p.name || '').toLowerCase().includes(q)) return true;
   if ((p.processName || '').toLowerCase().includes(q)) return true;
-  if ((p.activeTabTitle || '').toLowerCase().includes(q)) return true;
   if ((p.windowTitles || []).some((t) => t.toLowerCase().includes(q))) return true;
-  if ((p.tabs || []).some((t) => (t.title || '').toLowerCase().includes(q) || (t.url || '').toLowerCase().includes(q))) return true;
   return false;
 }
 
-/** Second line of a picker row: tab/window identification, then process identity. */
+/** Second line of a picker row: window identification, then process identity. */
 function processSubtitle(p) {
   const bits = [];
-  if (p.activeTabTitle) {
-    bits.push(`▶ ${p.activeTabTitle}`);
-    if (p.totalTabs > 1) bits.push(`${p.totalTabs} tabs`);
-  } else if (p.windowTitles && p.windowTitles.length) {
+  if (p.windowTitles && p.windowTitles.length) {
     bits.push(`🪟 ${p.windowTitles[0]}`);
     if (p.windowTitles.length > 1) bits.push(`+${p.windowTitles.length - 1} more`);
   }
@@ -439,7 +406,7 @@ function acceleratorFromEvent(e) {
   if (e.ctrlKey) mods.push('Control');
   if (e.altKey) mods.push('Alt');
   if (e.shiftKey) mods.push('Shift');
-  if (e.metaKey) mods.push('Super'); // Command on macOS, Windows key on Windows
+  if (e.metaKey) mods.push('Super'); // Windows key
   const key = e.key;
   if (!key) return '';
   const lower = key.toLowerCase();

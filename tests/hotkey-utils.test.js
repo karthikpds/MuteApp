@@ -34,10 +34,10 @@ test('parseAccelerator splits modifiers and key', () => {
   });
 });
 
-test('formatForDisplay uses platform-appropriate names', () => {
+test('formatForDisplay uses Windows names', () => {
   assert.equal(formatForDisplay('Control+Alt+Y', 'win32'), 'Ctrl + Alt + Y');
-  assert.equal(formatForDisplay('Super+Alt+Y', 'darwin'), '⌘ + ⌥ + Y');
-  assert.equal(formatForDisplay('Control+Shift+S', 'darwin'), '⌃ + ⇧ + S');
+  assert.equal(formatForDisplay('Super+Alt+Y', 'win32'), 'Win + Alt + Y');
+  assert.equal(formatForDisplay('Control+Shift+S', 'win32'), 'Ctrl + Shift + S');
   assert.equal(formatForDisplay('Super+S', 'win32'), 'Win + S');
   assert.equal(formatForDisplay('', 'win32'), 'Not set');
 });

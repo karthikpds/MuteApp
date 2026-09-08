@@ -1,4 +1,4 @@
-Build a cross-platform desktop application called **AppMute** that runs on **Windows and macOS**.
+Build a desktop application called **AppMute** that runs on **Windows**.
 
 ## Core purpose
 
@@ -27,12 +27,11 @@ The app should work with common audio-producing applications such as:
 
 ## Important platform requirement
 
-The application must support both:
+The application must support:
 
 * Windows
-* macOS
 
-Use platform-appropriate APIs for controlling application audio.
+Use the Windows audio APIs for controlling application audio.
 
 Do NOT simply change the computer's master volume. The goal is to control the audio of an individual application while leaving all other applications unaffected.
 
@@ -148,11 +147,9 @@ The user should be able to use modifier keys such as:
 * Ctrl
 * Alt
 * Shift
-* Windows key on Windows
-* Command on macOS
-* Option on macOS
+* Windows key
 
-Use the appropriate names/symbols for each platform.
+Use Windows names (`Ctrl + Alt + Y`, `Win + S`).
 
 ## Mute behavior
 
@@ -225,7 +222,7 @@ The following should persist after restarting AppMute:
 
 If an application is not currently running, keep it in the list and automatically detect it when it launches again.
 
-## System tray / menu bar
+## System tray
 
 AppMute should be able to run in the background.
 
@@ -233,11 +230,7 @@ On Windows:
 
 * Add a system tray icon.
 
-On macOS:
-
-* Add a menu bar icon.
-
-Closing the main window should optionally minimize AppMute to the tray/menu bar rather than completely exiting.
+Closing the main window should optionally minimize AppMute to the tray rather than completely exiting.
 
 Provide an option in settings for:
 
@@ -256,7 +249,7 @@ Create a simple Settings page containing options such as:
 * Launch AppMute at startup
 * Start minimized
 * Show mute notifications
-* Minimize to tray/menu bar when closed
+* Minimize to tray when closed
 * Dark/light/system theme
 * Reset settings
 
@@ -284,18 +277,18 @@ The main application window should be compact enough to remain open beside other
 
 ## Architecture
 
-Before implementing, determine the best cross-platform desktop framework and audio APIs for Windows and macOS.
+Before implementing, determine the best desktop framework and Windows audio APIs.
 
 Prioritize:
 
 1. Reliable per-application audio control
 2. Reliable global hotkeys
-3. Windows/macOS compatibility
+3. Windows compatibility
 4. Low CPU and memory usage
 5. Persistent configuration
 6. Simple installation/build process
 
-Keep platform-specific audio functionality isolated so that Windows and macOS implementations can use their respective APIs while sharing the same UI and application logic.
+Keep audio functionality isolated behind a small backend facade.
 
 ## Error handling
 
@@ -307,7 +300,6 @@ Handle situations such as:
 * A hotkey cannot be registered
 * A hotkey conflicts with another AppMute hotkey
 * The user removes an application
-* Permissions are required on macOS
 * The application changes its audio output
 * The target application closes and reopens
 
@@ -321,21 +313,20 @@ Do not build a fake UI/demo.
 
 The application must actually attempt to perform the requested audio controls using real operating-system APIs.
 
-Before building the full UI, verify that the chosen Windows and macOS APIs can actually perform per-application audio muting.
+Before building the full UI, verify that the chosen Windows APIs can actually perform per-application audio muting.
 
-If a requested feature is impossible or significantly different between Windows and macOS, document the limitation and implement the closest reliable behavior rather than creating a misleading interface.
+If a requested feature is impossible through the available Windows APIs, document the limitation and implement the closest reliable behavior rather than creating a misleading interface.
 
 ## Development process
 
 First:
 
 1. Analyze the requirements.
-2. Determine the appropriate cross-platform framework.
+2. Determine the appropriate framework.
 3. Determine how per-application audio muting will work on Windows.
-4. Determine how per-application audio muting will work on macOS.
-5. Determine how global hotkeys will work on both platforms.
-6. Identify platform-specific limitations.
-7. Propose the architecture.
+4. Determine how global hotkeys will work.
+5. Identify limitations.
+6. Propose the architecture.
 
 Then implement the application.
 
@@ -346,7 +337,7 @@ After implementation:
 * Test hotkeys while another application has focus.
 * Test restarting AppMute.
 * Test applications being closed and reopened.
-* Test both Windows and macOS-specific behavior.
+* Test Windows-specific behavior.
 * Fix errors rather than leaving TODOs or placeholder functionality.
 
 The final result should be a functional, polished **AppMute** desktop application rather than a prototype.

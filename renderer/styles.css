@@ -100,7 +100,6 @@ html[data-theme="light"] .notice { background: #fef3c7; color: #92400e; }
 .pill.muted { background: rgba(124, 45, 18, 0.5); color: #fdba74; border-color: #9a3412; }
 .pill.paused { background: rgba(30, 58, 138, 0.5); color: #93c5fd; border-color: #1e40af; }
 .pill.offline { opacity: 0.8; }
-.pill.emulated { border-style: dashed; }
 
 .hotkey-chip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 7px; padding: 4px 9px; color: var(--text); cursor: pointer; }
 .hotkey-chip:hover { border-color: var(--accent); }

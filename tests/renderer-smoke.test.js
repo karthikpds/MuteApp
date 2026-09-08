@@ -54,23 +54,22 @@ function makeEl() {
 const SAMPLE_STATE = {
   apps: [
     {
-      id: 'a1', name: 'Spotify', processName: 'Spotify', exePath: '', pid: 111,
-      hotkey: 'Control+Alt+S', pauseHotkey: 'Control+Alt+P', muted: true, emulated: true, paused: false, running: true,
-      support: { muteSupported: true, muteEmulated: true, pauseSupported: true, muteReason: '', pauseReason: '' },
+      id: 'a1', name: 'Spotify', processName: 'Spotify.exe', exePath: '', pid: 111,
+      hotkey: 'Control+Alt+S', pauseHotkey: 'Control+Alt+P', muted: true, emulated: false, paused: false, running: true,
+      support: { muteSupported: true, muteEmulated: false, pauseSupported: true, muteReason: '', pauseReason: '' },
     },
     {
-      id: 'a2', name: 'Google Chrome', processName: 'Google Chrome', exePath: '', pid: 222,
+      id: 'a2', name: 'chrome', processName: 'chrome.exe', exePath: '', pid: 0,
       hotkey: '', pauseHotkey: '', muted: false, emulated: false, paused: false, running: false,
       support: {
-        muteSupported: false, muteEmulated: false, pauseSupported: false,
-        muteReason: 'macOS does not provide a per-application mute API.',
-        pauseReason: 'No media controls.',
+        muteSupported: true, muteEmulated: false, pauseSupported: true,
+        muteReason: '', pauseReason: '',
       },
     },
   ],
   settings: { theme: 'dark', showNotifications: true },
-  platform: 'macos',
-  capabilities: { perAppMute: false, notes: 'macOS has no public per-application mute API.' },
+  platform: 'windows',
+  capabilities: { perAppMute: true, notes: 'Windows supports true per-application muting via WASAPI audio sessions.' },
   autostart: false,
 };
 
@@ -132,14 +131,14 @@ test('every element id used in renderer.js exists in index.html', () => {
   }
 });
 
-test('picker subtitle and search cover tab and window titles', () => {
+test('picker subtitle and search cover window titles', () => {
   const { sandbox } = buildSandbox();
   vm.runInContext(RENDERER_SRC, sandbox, { filename: 'renderer.js' });
   const chrome = {
-    name: 'Google Chrome', processName: 'Google Chrome', pid: 111,
-    activeTabTitle: 'YouTube', totalTabs: 5,
+    name: 'chrome', processName: 'chrome.exe', pid: 0, grouped: true, processCount: 5,
+    windowTitles: ['YouTube - Google Chrome'],
   };
-  assert.equal(sandbox.processSubtitle(chrome), '▶ YouTube · 5 tabs · Google Chrome · PID 111');
+  assert.equal(sandbox.processSubtitle(chrome), '🪟 YouTube - Google Chrome · chrome.exe · 5 processes');
   assert.equal(sandbox.processMatches(chrome, 'youtube'), true);
   assert.equal(sandbox.processMatches(chrome, 'chrome'), true);
   assert.equal(sandbox.processMatches(chrome, 'zzz-no-match'), false);
@@ -162,22 +161,20 @@ test('renderer renders header, cards and status bar from live state', async () =
   await flush();
 
   const badge = elements.get('platform-badge');
-  assert.match(badge.textContent, /macOS · limited/);
+  assert.match(badge.textContent, /Windows · true per-app mute/);
   const notice = elements.get('platform-notice');
-  assert.equal(notice.classList.contains('hidden'), false);
-  assert.match(elements.get('platform-notice-text').innerHTML, /macOS limitation/);
+  assert.equal(notice.classList.contains('hidden'), true);
 
   const list = elements.get('app-list');
   assert.equal(list.children.length, 2);
   const [spotify, chrome] = list.children.map((c) => c.innerHTML);
   assert.match(spotify, /Spotify/);
   assert.match(spotify, /Muted/);
-  assert.match(spotify, /⌃ \+ ⌥ \+ S/); // Control+Alt+S shown with macOS symbols
-  assert.match(spotify, /⌃ \+ ⌥ \+ P/); // pause hotkey chip alongside the mute one
-  assert.match(chrome, /Google Chrome/);
+  assert.match(spotify, /Ctrl \+ Alt \+ S/); // Control+Alt+S shown with Windows names
+  assert.match(spotify, /Ctrl \+ Alt \+ P/); // pause hotkey chip alongside the mute one
+  assert.match(chrome, /chrome/);
   assert.match(chrome, /Not running/);
   assert.match(chrome, /Set mute key/);
-  assert.match(chrome, /Pause N\/A/); // pause unsupported: disabled chip, not a setter
 
   assert.match(elements.get('statusbar-text').textContent, /2 apps · 1 muted/);
   assert.equal(elements.get('empty-state').classList.contains('hidden'), true);
